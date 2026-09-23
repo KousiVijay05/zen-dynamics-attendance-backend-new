@@ -18,6 +18,55 @@
   <link rel="stylesheet" href="styles/components.css" />
   <link rel="stylesheet" href="styles/views.css" />
 
+  <!-- There's no bundler (by design — see README), so js/app.js and everything
+       it imports would otherwise load as a sequential discovery chain: the
+       browser fetches app.js, parses it, discovers its imports, fetches
+       those, discovers theirs, and so on — one network round trip per link
+       in the chain. On a fast connection that's invisible; on a slow/high-
+       latency mobile connection it's the difference between the app
+       appearing in ~1s and taking 10+ seconds, and a feature whose file
+       loads late in the chain (e.g. a tab's view module) can look "missing"
+       simply because it hasn't arrived yet. These hints tell the browser to
+       start fetching the whole module graph in parallel immediately instead
+       of discovering it one file at a time. Keep this list in sync with
+       sw.js's ASSETS (everything under js/ except storage-local.js /
+       storage-gsheets.js, which are classic scripts, not ES modules). -->
+  <link rel="modulepreload" href="js/app.js" />
+  <link rel="modulepreload" href="js/core/config.js" />
+  <link rel="modulepreload" href="js/core/store.js" />
+  <link rel="modulepreload" href="js/domain/attendance.js" />
+  <link rel="modulepreload" href="js/domain/auth.js" />
+  <link rel="modulepreload" href="js/domain/excel.js" />
+  <link rel="modulepreload" href="js/domain/geofence.js" />
+  <link rel="modulepreload" href="js/domain/leave.js" />
+  <link rel="modulepreload" href="js/domain/org.js" />
+  <link rel="modulepreload" href="js/domain/payroll.js" />
+  <link rel="modulepreload" href="js/domain/roster.js" />
+  <link rel="modulepreload" href="js/events/handlers.js" />
+  <link rel="modulepreload" href="js/storage/storage-api.js" />
+  <link rel="modulepreload" href="js/ui/dom.js" />
+  <link rel="modulepreload" href="js/ui/notify.js" />
+  <link rel="modulepreload" href="js/ui/render.js" />
+  <link rel="modulepreload" href="js/ui/components/brand.js" />
+  <link rel="modulepreload" href="js/ui/components/monthOptions.js" />
+  <link rel="modulepreload" href="js/ui/components/proximity.js" />
+  <link rel="modulepreload" href="js/ui/components/syncStatus.js" />
+  <link rel="modulepreload" href="js/ui/views/admin/index.js" />
+  <link rel="modulepreload" href="js/ui/views/admin/leave.js" />
+  <link rel="modulepreload" href="js/ui/views/admin/onsite.js" />
+  <link rel="modulepreload" href="js/ui/views/admin/payroll.js" />
+  <link rel="modulepreload" href="js/ui/views/admin/people.js" />
+  <link rel="modulepreload" href="js/ui/views/admin/records.js" />
+  <link rel="modulepreload" href="js/ui/views/admin/settings.js" />
+  <link rel="modulepreload" href="js/ui/views/admin/shifts.js" />
+  <link rel="modulepreload" href="js/ui/views/pin.js" />
+  <link rel="modulepreload" href="js/ui/views/recover.js" />
+  <link rel="modulepreload" href="js/ui/views/setup.js" />
+  <link rel="modulepreload" href="js/ui/views/signin.js" />
+  <link rel="modulepreload" href="js/ui/views/staff.js" />
+  <link rel="modulepreload" href="js/utils/format.js" />
+  <link rel="modulepreload" href="js/utils/geomath.js" />
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 </head>
 <body>

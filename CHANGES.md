@@ -235,3 +235,27 @@ placeholder:
   Trade-off: the live seconds counter visually pauses while a field is
   focused and resumes the moment it loses focus — confirmed correct,
   not a regression.
+
+## 2026-09-23 (later still) — Faster first load on slow connections
+- There's no bundler (by design — see README), so `js/app.js` and its
+  ~35 imported modules were loading as a sequential discovery chain:
+  fetch a file, parse it, discover its imports, fetch those, repeat.
+  Measured under a throttled ("slow mobile") network against a plain
+  HTTP/1.1 server, the last file in that chain didn't finish until
+  ~9.5s in. Against the real GitHub Pages deployment (HTTP/2) it was
+  already much better (~4s) but still a fully sequential dependency
+  before anything renders.
+- Added `<link rel="modulepreload">` for every JS module in
+  `index.html`'s `<head>`, so the browser starts fetching the whole
+  module graph in parallel immediately instead of discovering it one
+  file at a time. Keep this list in sync with `sw.js`'s `ASSETS` when
+  adding new files.
+- Investigated but ruled out as the cause of "leave/tasks not visible
+  on some phones": realistic multi-staff data, a mobile viewport, a
+  throttled network, and touch interaction all reproduced fine in
+  testing. Since the app has no lazy-loading (every view module is
+  imported eagerly by `app.js`, all-or-nothing), a still-loading file
+  can't explain a *specific* section going missing while the rest of
+  the screen works — investigation continues with device-side
+  evidence (screenshots/recordings) rather than more environment
+  simulation.

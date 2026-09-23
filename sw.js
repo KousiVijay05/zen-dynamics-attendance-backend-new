@@ -1,8 +1,9 @@
 /* Bump CACHE whenever you change any app file, otherwise phones keep
-   serving the old version. Bumped to v8: fixed the staff screen's
-   per-second re-render destroying focused form inputs mid-interaction
-   (couldn't pick a leave date — see CHANGES.md). */
-const CACHE = "attendance-v8";
+   serving the old version. Bumped to v9: added modulepreload hints in
+   index.html so the whole JS module graph fetches in parallel instead
+   of as a sequential import-discovery chain (faster first load on slow
+   connections — see CHANGES.md). */
+const CACHE = "attendance-v9";
 const ASSETS = [
   "./", "./index.html", "./manifest.json",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/mark.png", "./icons/logo-lockup.png",

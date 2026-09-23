@@ -40,15 +40,37 @@ export function createWorkplace(fields) {
     throw new Error("Set the site coordinates first.");
   }
 
-  state.cfg = {
-    org: org,
-    site: { lat: la, lng: ln, radius: isFinite(rad) && rad >= 10 ? rad : 100 },
-    lockOutside: true, graceMin: 0, adminAnywhere: true, demo: false, pay: defaultPay(), shifts: [], leaves: []
-  };
-  state.roster = [{ id: uid(), name: nm, pin: pin, admin: true, active: true, salary: 0, joined: dayKey(Date.now()) }];
-  state.msg = "";
+  /* This screen appears whenever state.cfg is falsy — which is also what
+     happens after a failed or stale fetch of org:config (see
+     js/storage/storage-gsheets.js's local-snapshot fallback), not only
+     when a workplace genuinely doesn't exist yet. Since this flow
+     unconditionally overwrites org:config and org:roster, that ambiguity
+     is dangerous: anyone who lands here on a bad connection would wipe
+     out a real, already-set-up workplace with no warning.
 
-  return Promise.all([saveCfg(), saveRoster()]).then(function () { return signIn(state.roster[0]); });
+     sget() alone isn't enough here — it reads from an in-memory cache
+     populated once at boot, so if THAT boot-time fetch was the one that
+     failed, re-reading it just returns the same stale/empty answer.
+     window.storageSync() (when the Google Sheets backend is active)
+     forces an actual fresh network pull first, so this check reflects
+     what's really on the server right now, not a cached guess. */
+  return (window.storageSync ? window.storageSync() : Promise.resolve()).then(function () {
+    return sget("org:config", true);
+  }).then(function (existing) {
+    if (existing) {
+      throw new Error("A workplace already exists on this link — reload the page and sign in instead of setting up a new one. If you manage this app and believe that's wrong, check with whoever administers it before proceeding.");
+    }
+
+    state.cfg = {
+      org: org,
+      site: { lat: la, lng: ln, radius: isFinite(rad) && rad >= 10 ? rad : 100 },
+      lockOutside: true, graceMin: 0, adminAnywhere: true, demo: false, pay: defaultPay(), shifts: [], leaves: []
+    };
+    state.roster = [{ id: uid(), name: nm, pin: pin, admin: true, active: true, salary: 0, joined: dayKey(Date.now()) }];
+    state.msg = "";
+
+    return Promise.all([saveCfg(), saveRoster()]).then(function () { return signIn(state.roster[0]); });
+  });
 }
 
 /** "No administrator found" recovery screen: adds a fresh admin without touching existing records. */

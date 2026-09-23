@@ -285,3 +285,38 @@ placeholder:
   `index.html` so a fresh page load isn't waiting on the service
   worker to update either. Bump both together (`sw.js`'s `CACHE`
   constant and the `?v=` numbers) on every future deploy.
+
+## 2026-09-24 — Fixed: a shared visitor could overwrite the whole workplace
+
+**What happened:** someone on the same public link ended up on the
+"Set up attendance" screen and completed it, which overwrote the real
+`org:config` and `org:roster` with a brand-new single-admin workplace.
+Real data wasn't deleted (attendance logs under the original staff IDs
+were untouched) but the roster/settings pointing to it were replaced.
+Restored from a copy captured earlier in the same working session.
+
+**Root cause:** `vSetup()` (and the "Create workplace" flow behind it)
+shows/runs whenever `state.cfg` is falsy. That's also what happens
+after a *failed* or *stale* fetch of `org:config` — `storage-gsheets.js`
+falls back to a local snapshot, and a network hiccup or race at boot
+can leave that snapshot empty. The client never had this distinguished
+from "no workplace has ever been created," and `createWorkplace()`
+overwrote `org:config`/`org:roster` unconditionally.
+
+**Fix (`js/domain/auth.js`):** immediately before committing
+`createWorkplace()`'s writes, force a *fresh* network check —
+`window.storageSync()` (bypasses any cached/stale snapshot) followed by
+`sget("org:config", true)` — and refuse with a clear message if a
+workplace turns out to already exist. Regression-tested: genuine
+first-time setup (nothing exists yet) still works exactly as before.
+
+**What this doesn't fix, and can't from the client alone:** `SECRET` is
+inherently visible to anyone who views this deployed page's source (see
+README's Security section) — a deliberate actor who extracts it can
+call the Apps Script endpoint directly, bypassing this check and the
+app entirely. This change closes the *accidental* path (by far the
+likelier one for a link shared casually) and narrows the *deliberate*
+one's window, but real protection against a deliberate attacker
+requires either real per-user backend authentication or restricting who
+ever receives this link. Worth deciding whether that's needed for how
+this app is actually being shared.

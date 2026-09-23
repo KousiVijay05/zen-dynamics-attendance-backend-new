@@ -1,18 +1,14 @@
 /* Bump CACHE whenever you change any app file, otherwise phones keep
-   serving the old version. Bumped to v11: GitHub Pages sends
-   Cache-Control: max-age=600 on every file, and this fetch handler's
-   fetch(e.request) was still subject to that — "network first" isn't
-   "fresh" if the browser's own HTTP cache satisfies it. Added
-   cache: "no-store" here, plus ?v= cache-busting on the CSS links in
-   index.html for a fresh page load that hasn't picked up the new SW
-   yet (see CHANGES.md). */
-const CACHE = "attendance-v11";
+   serving the old version. Bumped to v12: closed the hole where a
+   visitor landing on a stale/failed "Set up attendance" screen could
+   overwrite a real, already-set-up workplace (see CHANGES.md). */
+const CACHE = "attendance-v12";
 const ASSETS = [
   "./", "./index.html", "./manifest.json",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/mark.png", "./icons/logo-lockup.png",
 
-  "./styles/tokens.css?v=11", "./styles/base.css?v=11",
-  "./styles/components.css?v=11", "./styles/views.css?v=11",
+  "./styles/tokens.css?v=12", "./styles/base.css?v=12",
+  "./styles/components.css?v=12", "./styles/views.css?v=12",
 
   "./js/app.js",
   "./js/core/config.js", "./js/core/store.js",

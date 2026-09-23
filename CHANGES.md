@@ -274,3 +274,14 @@ placeholder:
   correct regardless of what it's nested inside. Verified: computed
   color is now `rgb(10, 10, 10)` against the card's `rgb(255, 255,
   255)` background.
+- The fix didn't visibly land on a phone that had loaded the app
+  recently. Root cause: GitHub Pages sends `Cache-Control: max-age=600`
+  on every file, and `sw.js`'s "network first" fetch handler was still
+  calling plain `fetch(e.request)` — which itself respects that header,
+  so it could silently return the browser's 10-minute-old cached copy
+  instead of actually hitting the network. Added `cache: "no-store"`
+  to that fetch call so it truly always goes to network, and added
+  `?v=` cache-busting query strings to the CSS `<link>` tags in
+  `index.html` so a fresh page load isn't waiting on the service
+  worker to update either. Bump both together (`sw.js`'s `CACHE`
+  constant and the `?v=` numbers) on every future deploy.

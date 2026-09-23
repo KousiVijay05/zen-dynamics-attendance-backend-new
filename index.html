@@ -13,10 +13,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 
-  <link rel="stylesheet" href="styles/tokens.css" />
-  <link rel="stylesheet" href="styles/base.css" />
-  <link rel="stylesheet" href="styles/components.css" />
-  <link rel="stylesheet" href="styles/views.css" />
+  <!-- ?v= busts GitHub Pages' Cache-Control: max-age=600 on a fresh page
+       load, so a hard refresh doesn't need to wait out a 10-minute-old
+       cached copy. Bump this alongside sw.js's CACHE constant. -->
+  <link rel="stylesheet" href="styles/tokens.css?v=11" />
+  <link rel="stylesheet" href="styles/base.css?v=11" />
+  <link rel="stylesheet" href="styles/components.css?v=11" />
+  <link rel="stylesheet" href="styles/views.css?v=11" />
 
   <!-- There's no bundler (by design — see README), so js/app.js and everything
        it imports would otherwise load as a sequential discovery chain: the

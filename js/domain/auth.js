@@ -43,7 +43,7 @@ export function createWorkplace(fields) {
   state.cfg = {
     org: org,
     site: { lat: la, lng: ln, radius: isFinite(rad) && rad >= 10 ? rad : 100 },
-    lockOutside: true, graceMin: 0, adminAnywhere: true, demo: false, pay: defaultPay(), shifts: []
+    lockOutside: true, graceMin: 0, adminAnywhere: true, demo: false, pay: defaultPay(), shifts: [], leaves: []
   };
   state.roster = [{ id: uid(), name: nm, pin: pin, admin: true, active: true, salary: 0, joined: dayKey(Date.now()) }];
   state.msg = "";

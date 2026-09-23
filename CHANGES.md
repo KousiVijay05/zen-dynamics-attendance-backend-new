@@ -186,3 +186,38 @@ placeholder:
 - Admin Records displays task completion/incomplete status.
 - Fixed attendance persistence to use the storage API (`sset`) so task data reaches Google Sheets.
 - Fixed Records late-arrival calculation to use the actual time-of-day.
+
+## 2026-09-23 — Go-live fixes + leave requests
+
+**Fixes (found while preparing this app for real deployment):**
+- `js/storage/storage-gsheets.js` had been overwritten with the wrong
+  file's content (a copy of the Records tab code) — the Google Sheets
+  backend was silently non-functional despite being the active storage
+  backend in `index.html`. Restored.
+- Shift Master (`state.cfg.shifts`) and per-person shift assignment used
+  to live in this device's own `localStorage`, so a shift an admin
+  created never reached staff on other devices. Moved onto the synced
+  `org:config` key, same pattern as site/pay settings.
+- Fixed a crash on brand-new workplace setup (`Add shift` threw —
+  `cfg.shifts` was never initialized for a freshly created workplace).
+- Wired up the "Edit" button on Shift Master, which had no click handler
+  at all.
+
+**New: Leave requests**
+- Staff can request a date range of leave (with an optional reason) from
+  their own dashboard; a per-year allowance defaults to 15 days and is
+  configurable in Admin → Payroll → Rules ("Requestable leave allowed
+  per year"). A pending request reserves its days against the balance
+  so two overlapping requests can't both be approved past the allowance.
+- Admin gets a new "Leave" tab: approve/reject pending requests, browse
+  history.
+- **Payroll callout (not silent — payroll math is otherwise untouched
+  per this file's own rule):** a day covered by an *approved* leave
+  request is now its own status, "On leave", counted separately
+  (`r.leave`) and folded into `creditedDays` alongside full/half days —
+  so an approved leave day is paid, not deducted as an absence. See
+  `js/domain/payroll.js`'s file header for the exact mechanics.
+- Leave data lives in `state.cfg.leaves`, saved through the existing
+  `org:config` key — no Apps Script / `Code.gs` changes needed.
+- Excel export gets a fifth sheet, "Leave" (every request, staff,
+  dates, status, reason).

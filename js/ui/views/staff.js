@@ -25,6 +25,7 @@ import {
 } from "../../domain/attendance.js";
 
 import { payrollFor, money } from "../../domain/payroll.js";
+import { leaveBalance, leavesFor } from "../../domain/leave.js";
 import { proxBlock, lockedBlock } from "../components/proximity.js";
 import { brandMark } from "../components/brand.js";
 
@@ -104,7 +105,8 @@ export function vStaff() {
         d === null
           ? ""
           : '<p class="why warn">Clock-in and clock-out only work inside the zone.</p>'
-      )
+      ) +
+      myLeave()
     );
   }
 
@@ -212,6 +214,7 @@ export function vStaff() {
 
       myMonth() +
       myHistory() +
+      myLeave() +
 
     '</div>'
   );
@@ -360,6 +363,49 @@ export function vStaff() {
     });
 
     html += "</div>";
+
+    return html;
+  }
+
+  function myLeave() {
+    var bal = leaveBalance(state.me.id, new Date().getFullYear());
+    var mine = leavesFor(state.me.id).slice().sort(function (a, b) { return b.requestedAt - a.requestedAt; });
+
+    var html =
+      '<h2>Leave</h2>' +
+      '<div class="stat"><span class="k">Remaining this year</span><span class="v">' +
+        bal.remaining + ' / ' + bal.total +
+      '</span></div>' +
+
+      '<div class="field pair">' +
+        '<div><label for="lv_from">From</label><input id="lv_from" type="date"></div>' +
+        '<div><label for="lv_to">To</label><input id="lv_to" type="date"></div>' +
+      '</div>' +
+      '<div class="field"><label for="lv_reason">Reason (optional)</label>' +
+        '<input id="lv_reason" type="text" placeholder="e.g. Family event"></div>' +
+      '<div class="btnrow"><button class="btn go wide" data-act="leaverequest">Request leave</button></div>' +
+      '<p class="msg' + (state.msgOk ? " ok" : "") + '">' + esc(state.msg) + '</p>';
+
+    if (mine.length) {
+      html += '<div class="rows">' +
+        mine.map(function (l) {
+          return '<div class="row">' +
+            '<span>' +
+              '<span class="span">' +
+                esc(l.from) + (l.to !== l.from ? ' – ' + esc(l.to) : '') +
+                (l.status === "approved" ? '<span class="tag on">approved</span>'
+                  : l.status === "rejected" ? '<span class="tag">rejected</span>'
+                  : '<span class="tag pending">pending</span>') +
+              '</span>' +
+              (l.reason ? '<br><span class="meta">' + esc(l.reason) + '</span>' : '') +
+            '</span>' +
+            (l.status === "pending"
+              ? '<button class="btn quiet small" data-act="leavecancel" data-id="' + l.id + '">Cancel</button>'
+              : '<span class="dur">' + l.days + 'd</span>') +
+          '</div>';
+        }).join('') +
+      '</div>';
+    }
 
     return html;
   }

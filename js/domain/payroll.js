@@ -11,10 +11,19 @@
    a day with hours below halfDayHours ("Short") is labeled "Short"
    in the UI but counted as a full absence for pay (r.absent++, not
    r.half). That was true in the original and still is here.
+
+   EXPLICIT CALLOUT (new, not silent — see CHANGES.md): a day covered
+   by an *approved* leave request (js/domain/leave.js) is now its own
+   status, "On leave", counted in r.leave and folded into creditedDays
+   alongside full/half days — so an approved leave day is paid, not
+   deducted as an absence. It's checked before the present/absent
+   ladder below, so it takes priority over what the punches (or lack
+   of them) on that day would otherwise say.
 ----------------------------------------------------------------*/
 
 import { state } from "../core/store.js";
 import { dayKey, tClock, minsOfDay, parseHM, num } from "../utils/format.js";
+import { isOnApprovedLeave } from "./leave.js";
 
 export function monthDays(ym) {
   var y = +ym.slice(0, 4), m = +ym.slice(5, 7);
@@ -47,7 +56,7 @@ export function payrollFor(p, ym) {
   var todayK = dayKey(Date.now());
   var shiftStart = parseHM(P.shiftStart);
 
-  var r = { rows: [], workingDays: 0, full: 0, half: 0, absent: 0, lates: 0, hours: 0, ot: 0, offWorked: 0 };
+  var r = { rows: [], workingDays: 0, full: 0, half: 0, absent: 0, leave: 0, lates: 0, hours: 0, ot: 0, offWorked: 0 };
 
   for (var d = 1; d <= nDays; d++) {
     var date = new Date(y, m - 1, d);
@@ -56,9 +65,11 @@ export function payrollFor(p, ym) {
     var rec = map[k];
     var hrs = rec ? rec.ms / 3600000 : 0;
     var future = k > todayK || (p.joined && k < p.joined);
+    var onLeave = !isOff && !future && isOnApprovedLeave(p.id, k);
     var status;
 
     if (isOff) status = rec ? "Worked (off day)" : "Weekly off";
+    else if (onLeave) status = "On leave";
     else if (future) status = (p.joined && k < p.joined) ? "Before joining" : "—";
     else if (hrs >= P.fullDayHours) status = "Present";
     else if (hrs >= P.halfDayHours) status = "Half day";
@@ -70,7 +81,8 @@ export function payrollFor(p, ym) {
 
     if (!isOff && !future && k !== todayK) r.workingDays++;
     if (!isOff) {
-      if (status === "Present") r.full++;
+      if (status === "On leave") r.leave++;
+      else if (status === "Present") r.full++;
       else if (status === "Half day") r.half++;
       else if (status === "Short") { r.half += 0; r.absent++; }
       else if (status === "Absent") r.absent++;
@@ -94,7 +106,7 @@ export function payrollFor(p, ym) {
     : salary * P.stdHours;                    // hourly basis: salary field holds hourly rate
   var perHour = P.basis === "monthly" ? perDay / (P.stdHours || 8) : salary;
 
-  var creditedDays = r.full + r.half * 0.5;
+  var creditedDays = r.full + r.half * 0.5 + r.leave;
   var shortfall = Math.max(0, r.workingDays - creditedDays);
   var paidLeave = Math.min(shortfall, num(P.paidLeave, 0));
   var unpaid = Math.max(0, shortfall - paidLeave);

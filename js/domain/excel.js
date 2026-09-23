@@ -41,10 +41,19 @@ function buildWorkbook() {
     staff.push([p.name, p.pin, p.salary || 0, p.admin ? "Yes" : "", p.active === false ? "" : "Yes"]);
   });
 
+  var names = {};
+  state.roster.forEach(function (p) { names[p.id] = p.name; });
+  var leave = [["Staff", "From", "To", "Days", "Status", "Reason", "Requested"]];
+  (state.cfg.leaves || []).forEach(function (l) {
+    leave.push([names[l.staffId] || l.staffId, l.from, l.to, l.days, l.status, l.reason || "",
+      new Date(l.requestedAt).toLocaleString()]);
+  });
+
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sum), "Payroll");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(daily), "Daily attendance");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(shifts), "Shifts");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(staff), "Staff");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(leave), "Leave");
   return wb;
 }
 

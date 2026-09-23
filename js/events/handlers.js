@@ -30,6 +30,7 @@ import {
   addShift, updateShift, deleteShift, startEditShift, cancelEditShift
 } from "../domain/org.js";
 import { exportExcel } from "../domain/excel.js";
+import { requestLeave, cancelLeave, decideLeave } from "../domain/leave.js";
 
 export function initEvents() {
   var root = $("root");
@@ -221,7 +222,8 @@ tasks: selectedTasks
         fullDayHours: $("p_full").value, halfDayHours: $("p_half").value,
         shiftStart: $("p_start").value, lateGrace: $("p_grace").value,
         lateMarksPerDeduct: $("p_lpd").value, lateDeductDays: $("p_ldd").value,
-        paidLeave: $("p_leave").value, otEnabled: $("p_ot").checked, otRate: $("p_otr").value
+        paidLeave: $("p_leave").value, leavePerYear: $("p_leaveyr").value,
+        otEnabled: $("p_ot").checked, otRate: $("p_otr").value
       }).then(function (msg) { say(msg, true); });
       return;
     }
@@ -234,6 +236,29 @@ tasks: selectedTasks
           lockOutside: $("s_lock").checked, adminAnywhere: $("s_anywhere").checked, demo: $("s_demo").checked
         }).then(function (msg) { say(msg, true); }).catch(function (err) { say(err.message); });
       } catch (err) { say(err.message); }
+      return;
+    }
+
+    if (act === "leaverequest") {
+      try {
+        requestLeave(state.me.id, {
+          from: $("lv_from").value, to: $("lv_to").value, reason: $("lv_reason").value
+        }).then(function (msg) { sayAndPaint(msg, true); }).catch(function (err) { say(err.message); });
+      } catch (err) { say(err.message); }
+      return;
+    }
+
+    if (act === "leavecancel") {
+      try {
+        cancelLeave(id, state.me.id).then(function (msg) { sayAndPaint(msg, true); }).catch(function (err) { say(err.message); });
+      } catch (err) { say(err.message); }
+      return;
+    }
+
+    if (act === "leaveapprove" || act === "leavereject") {
+      decideLeave(id, act === "leaveapprove", state.me.name)
+        .then(function (msg) { sayAndPaint(msg, true); })
+        .catch(function (err) { say(err.message); });
       return;
     }
 

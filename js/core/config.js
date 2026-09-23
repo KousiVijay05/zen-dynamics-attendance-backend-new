@@ -12,7 +12,8 @@ export function defaultPay() {
     currency: "₹", basis: "monthly",
     fixedDays: 26, stdHours: 8, fullDayHours: 7, halfDayHours: 4,
     shiftStart: "09:00", lateGrace: 15, lateMarksPerDeduct: 3, lateDeductDays: 0.5,
-    paidLeave: 1, otEnabled: true, otRate: 1.5, weeklyOff: [0]
+    paidLeave: 1, otEnabled: true, otRate: 1.5, weeklyOff: [0],
+    leavePerYear: 15
   };
 }
 
@@ -30,5 +31,7 @@ export function withConfigDefaults(cfg) {
   if (cfg.graceMin === undefined) cfg.graceMin = 0;
   if (cfg.demo === undefined) cfg.demo = false;
   if (!Array.isArray(cfg.shifts)) cfg.shifts = [];
+  if (!Array.isArray(cfg.leaves)) cfg.leaves = [];
+  if (cfg.pay.leavePerYear === undefined) cfg.pay.leavePerYear = 15;
   return cfg;
 }

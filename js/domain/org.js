@@ -82,6 +82,7 @@ export function savePayRules(fields) {
 P.lateMarksPerDeduct = Math.max(1, num(fields.lateMarksPerDeduct, 1));
 P.lateDeductDays = num(fields.lateDeductDays, 1);
   P.paidLeave = num(fields.paidLeave, 0);
+  P.leavePerYear = num(fields.leavePerYear, 15);
   P.otEnabled = !!fields.otEnabled;
   P.otRate = num(fields.otRate, 1.5);
   return saveCfg().then(function () { return "Rules saved."; });

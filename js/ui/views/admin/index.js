@@ -7,9 +7,10 @@ import { tabRecords } from "./records.js";
 import { tabPayroll } from "./payroll.js";
 import { tabSite } from "./settings.js";
 import { tabShifts } from "./shifts.js";
+import { tabLeaveAdmin } from "./leave.js";
 import { brandMark } from "../../components/brand.js";
 
-var TABS = ["onsite:On site", "people:People", "shifts:Shifts", "records:Records", "payroll:Payroll", "site:Settings"];
+var TABS = ["onsite:On site", "people:People", "shifts:Shifts", "leave:Leave", "records:Records", "payroll:Payroll", "site:Settings"];
 
 export function vAdmin() {
   var head = '<div class="bar"><div class="idn">' + brandMark() + '<div><div class="nm">' + esc(state.cfg.org) + "</div>" +
@@ -23,6 +24,7 @@ export function vAdmin() {
   if (state.tab === "onsite") return head + tabOnsite();
   if (state.tab === "people") return head + tabPeople();
   if (state.tab === "shifts") return head + tabShifts();
+  if (state.tab === "leave") return head + tabLeaveAdmin();
   if (state.tab === "records") return head + tabRecords();
   if (state.tab === "payroll") return head + tabPayroll();
   return head + tabSite();

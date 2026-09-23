@@ -34,6 +34,7 @@ export function tabPayroll() {
       '<div><label for="p_ldd">Days deducted each cut</label><input id="p_ldd" class="num" type="number" step="0.5" value="' + P.lateDeductDays + '" /></div></div>' +
       "<h3>Leave and overtime</h3>" +
       '<div class="field"><label for="p_leave">Paid leave allowed per month (days)</label><input id="p_leave" class="num" type="number" step="0.5" value="' + P.paidLeave + '" /></div>' +
+      '<div class="field"><label for="p_leaveyr">Requestable leave allowed per year (days)</label><input id="p_leaveyr" class="num" type="number" step="1" value="' + P.leavePerYear + '" /></div>' +
       '<label class="check"><input type="checkbox" id="p_ot"' + (P.otEnabled ? " checked" : "") + " /><div>Pay overtime<span>Hours beyond the standard day, at the multiplier below.</span></div></label>" +
       '<div class="field"><label for="p_otr">Overtime multiplier</label><input id="p_otr" class="num" type="number" step="0.25" value="' + P.otRate + '" /></div>' +
       '<div class="btnrow"><button class="btn go wide" data-act="savepay">Save rules</button></div>' +
@@ -54,6 +55,7 @@ export function tabPayroll() {
       '<div class="kv"><span>' + (state.cfg.pay.basis === "monthly" ? "Monthly salary" : "Hourly rate") + "</span><b>" + money(r.salary) + "</b></div>" +
       '<div class="kv"><span>Per-day value</span><b>' + money(r.perDay) + "</b></div>" +
       '<div class="kv"><span>Present (full / half)</span><b>' + r.full + " / " + r.half + "</b></div>" +
+      (r.leave ? '<div class="kv"><span>Approved leave (paid)</span><b>' + r.leave + "</b></div>" : "") +
       '<div class="kv"><span>Paid leave used</span><b>' + r.paidLeave.toFixed(1) + "</b></div>" +
       '<div class="kv"><span>Unpaid absence</span><b>' + r.unpaid.toFixed(1) + " days</b></div>" +
       '<div class="kv"><span>Late cut</span><b>' + r.lateDeductDays.toFixed(1) + " days</b></div>" +

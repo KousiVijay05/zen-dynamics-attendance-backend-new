@@ -256,6 +256,21 @@ placeholder:
   testing. Since the app has no lazy-loading (every view module is
   imported eagerly by `app.js`, all-or-nothing), a still-loading file
   can't explain a *specific* section going missing while the rest of
-  the screen works — investigation continues with device-side
-  evidence (screenshots/recordings) rather than more environment
-  simulation.
+  the screen works.
+
+## 2026-09-23 (later still) — Fixed: the actual "not visible" bug
+- A screenshot from the field showed it precisely: the Leave section's
+  "15 / 15" balance was rendering in near-white text on its own white
+  card — readable in no lighting condition, not just "slow to load."
+- Root cause: `.stat .v` (`styles/components.css`) never set its own
+  `color` — every prior use of `.stat` sat directly on the page's
+  light background with default dark text, so nobody had reason to
+  notice the value span was inheriting rather than declaring its
+  color. Nesting the new Leave `.stat` inside `.clock` (dark
+  background, light text, for the live timer) exposed it: `.stat`
+  keeps its own light card background, but the number inherited
+  `.clock`'s light text — white on white.
+- Fixed by giving `.stat .v` an explicit `color: var(--ink)`, so it's
+  correct regardless of what it's nested inside. Verified: computed
+  color is now `rgb(10, 10, 10)` against the card's `rgb(255, 255,
+  255)` background.

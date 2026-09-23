@@ -109,7 +109,11 @@
   box-shadow: var(--shadow-sm); border-left: 3px solid var(--gold);
 }
 .stat .k { font-size: 13px; color: var(--ink2); }
-.stat .v { font-family: var(--mono); font-size: 21px; font-weight: 600; font-variant-numeric: tabular-nums; }
+/* Explicit color, not inherited — .stat has its own light background
+   (--panel-raised) but was relying on ambient dark text from whatever
+   wraps it. Inside .clock (dark background, light text) that made this
+   number invisible: near-white text on this block's own white card. */
+.stat .v { font-family: var(--mono); font-size: 21px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); }
 
 details.pay { border-bottom: 1px solid var(--line); }
 details.pay > summary {

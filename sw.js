@@ -1,9 +1,9 @@
 /* Bump CACHE whenever you change any app file, otherwise phones keep
-   serving the old version. Bumped to v9: added modulepreload hints in
-   index.html so the whole JS module graph fetches in parallel instead
-   of as a sequential import-discovery chain (faster first load on slow
-   connections — see CHANGES.md). */
-const CACHE = "attendance-v9";
+   serving the old version. Bumped to v10: fixed invisible text — the
+   Leave balance number was near-white on its own white card (.stat .v
+   never declared its own color, only worked by accident everywhere
+   else it was used — see CHANGES.md). */
+const CACHE = "attendance-v10";
 const ASSETS = [
   "./", "./index.html", "./manifest.json",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/mark.png", "./icons/logo-lockup.png",

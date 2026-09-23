@@ -1,0 +1,245 @@
+/* Reusable building blocks: proximity card, clock, punch button, list rows, PIN pad, tabs, stat/payroll cards.
+   Brand: black/white/gold for anything decorative or CTA-like; --status-good/--status-bad (green/red) are
+   reserved for real-time status only — geofence in/out, an open shift, a warning, a success message. */
+
+.prox {
+  background: var(--panel-raised); border: 1px solid var(--line); border-radius: var(--radius-lg);
+  padding: 16px; display: flex; gap: 16px; align-items: center; margin-bottom: 10px;
+  box-shadow: var(--shadow-sm);
+}
+.radar { flex: 0 0 92px; height: 92px; }
+.radar circle:last-child { transition: cx .4s var(--ease), cy .4s var(--ease), fill .25s var(--ease); }
+.dist { font-family: var(--mono); font-size: 26px; font-weight: 600; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
+.dist small { font-size: 13px; font-weight: 500; color: var(--ink2); }
+.prox-note { font-size: 12.5px; color: var(--ink2); margin-top: 3px; }
+.prox.inside .dist { color: var(--status-good); }
+.prox.outside .dist { color: var(--status-bad); }
+
+.clock {
+  background: var(--ink); color: #F7F6F2; border-radius: var(--radius-lg); padding: 22px 16px 20px;
+  text-align: center; margin-bottom: 10px; box-shadow: var(--shadow-md); border-top: 3px solid var(--gold);
+}
+.clock .read { font-family: var(--mono); font-size: 46px; line-height: 1; font-weight: 500; letter-spacing: -1.5px; font-variant-numeric: tabular-nums; }
+.clock .cap { font-size: 12.5px; color: rgba(247, 246, 242, .6); margin-top: 9px; }
+/* The big running number is emphasized in gold (brand accent), not green — the small
+   corner dot is the actual "you're on shift" status indicator. */
+.clock.live .read { color: var(--gold); }
+.clock.live { position: relative; }
+.clock.live::before {
+  content: ""; position: absolute; top: 12px; right: 14px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--status-good); box-shadow: 0 0 0 0 rgba(31, 122, 76, .6); animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(31, 122, 76, .55); }
+  70% { box-shadow: 0 0 0 8px rgba(31, 122, 76, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(31, 122, 76, 0); }
+}
+.clock.locked { background: var(--status-bad); border-top-color: var(--status-bad); }
+.clock.locked .read { font-size: 22px; letter-spacing: 0; line-height: 1.3; }
+.clock.locked .cap { color: rgba(247, 226, 221, .85); }
+
+.punch {
+  width: 100%; min-height: 64px; border: 0; border-radius: var(--radius-lg); font-family: var(--sans);
+  font-size: 18px; font-weight: 700; color: var(--on-gold); background: var(--gold); cursor: pointer;
+  box-shadow: var(--shadow-md); transition: transform .1s var(--ease), background .15s var(--ease);
+}
+.punch:active:not(:disabled) { background: var(--gold-strong); transform: scale(.98); }
+.punch.out { background: var(--ink); color: #F7F6F2; }
+.punch.out:active:not(:disabled) { background: #000; }
+.punch:disabled { background: transparent; border: 1.5px solid var(--line); color: var(--ink3); cursor: not-allowed; box-shadow: none; }
+.why { font-size: 13px; color: var(--ink2); text-align: center; margin: 9px 2px 0; min-height: 18px; }
+.why.warn { color: var(--status-bad); }
+
+.rows { border-top: 1px solid var(--line); }
+.day {
+  display: flex; justify-content: space-between; align-items: baseline; padding: 10px 2px 5px;
+  font-size: 12.5px; color: var(--ink2); border-bottom: 1px solid var(--line); text-transform: uppercase; letter-spacing: .3px;
+}
+.day b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; text-transform: none; letter-spacing: 0; }
+.row {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 11px 2px;
+  border-bottom: 1px solid var(--line); font-size: 14px;
+}
+.row .span { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.row .dur { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.row .who { font-weight: 600; }
+.row .meta { font-size: 12.5px; color: var(--ink2); }
+.tag {
+  font-size: 10.5px; color: var(--status-bad); background: var(--status-bad-soft); border-radius: 4px;
+  padding: 2px 6px; margin-left: 6px; vertical-align: 1px; font-weight: 600;
+}
+.tag.on { color: var(--status-good); background: var(--status-good-soft); }
+.tag.admin { color: var(--ink2); background: var(--gold-soft); }
+.empty { font-size: 14px; color: var(--ink2); padding: 16px 2px; }
+
+.people { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.person {
+  text-align: left; padding: 15px 13px; border-radius: var(--radius-md); border: 1.5px solid var(--line);
+  background: var(--panel-raised); font-family: var(--sans); font-size: 15px; font-weight: 600; color: var(--ink);
+  cursor: pointer; line-height: 1.25; box-shadow: var(--shadow-sm); transition: transform .1s var(--ease), border-color .15s var(--ease);
+}
+.person:active { transform: scale(.98); border-color: var(--gold); }
+.person small { display: block; font-weight: 500; font-size: 12px; color: var(--status-good); margin-top: 4px; }
+.person.off small { color: var(--ink3); }
+
+.dots { display: flex; gap: 14px; justify-content: center; margin: 24px 0 6px; }
+.dot { width: 15px; height: 15px; border-radius: 50%; border: 1.5px solid var(--ink2); transition: all .15s var(--ease); }
+.dot.on { background: var(--gold); border-color: var(--gold-strong); transform: scale(1.1); }
+.pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 20px; }
+.key {
+  padding: 18px 0; font-family: var(--mono); font-size: 22px; font-weight: 500; border: 1px solid var(--line);
+  border-radius: var(--radius-md); background: var(--panel-raised); color: var(--ink); cursor: pointer;
+  box-shadow: var(--shadow-sm); transition: background .1s var(--ease), transform .1s var(--ease);
+}
+.key:active { background: var(--gold-soft); border-color: var(--gold); transform: scale(.96); }
+.key.blank { border: 0; background: transparent; box-shadow: none; cursor: default; }
+
+.tabs { display: flex; gap: 4px; background: var(--line2); padding: 3px; border-radius: 10px; margin-bottom: 4px; position: sticky; top: 0; z-index: 1; }
+.tab {
+  flex: 1; padding: 9px 1px; font-size: 11.5px; font-weight: 600; font-family: var(--sans);
+  border: 0; border-radius: 7px; background: transparent; color: var(--ink2); cursor: pointer; transition: all .15s var(--ease);
+  border-bottom: 2px solid transparent;
+}
+.tab.sel { background: var(--panel-raised); color: var(--ink); box-shadow: var(--shadow-sm); border-bottom-color: var(--gold); }
+
+.stat {
+  display: flex; justify-content: space-between; align-items: baseline; padding: 13px 15px;
+  background: var(--panel-raised); border: 1px solid var(--line); border-radius: var(--radius-md); margin-top: 10px;
+  box-shadow: var(--shadow-sm); border-left: 3px solid var(--gold);
+}
+.stat .k { font-size: 13px; color: var(--ink2); }
+.stat .v { font-family: var(--mono); font-size: 21px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+details.pay { border-bottom: 1px solid var(--line); }
+details.pay > summary {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  padding: 12px 2px; cursor: pointer; list-style: none; font-size: 14px;
+}
+details.pay > summary::-webkit-details-marker { display: none; }
+details.pay .net { font-family: var(--mono); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--gold-strong); }
+.kv { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 2px; color: var(--ink2); }
+.kv b { color: var(--ink); font-family: var(--mono); font-weight: 600; font-variant-numeric: tabular-nums; }
+.kv.sum { border-top: 1px solid var(--line2); margin-top: 6px; padding-top: 8px; color: var(--ink); font-weight: 600; }
+.payfoot { padding: 4px 2px 14px; }
+
+.loading {
+  font-size: 14px; color: var(--ink2); padding: 30px 2px; text-align: center;
+  position: relative; overflow: hidden; border-radius: var(--radius-md);
+}
+.loading::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(231, 182, 87, .25), transparent);
+  animation: shimmer 1.4s infinite;
+}
+@keyframes shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+/* Working days checkbox alignment */
+.checks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 20px;
+}
+
+.checks label {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 6px;
+  width: auto !important;
+  margin: 0 !important;
+  cursor: pointer;
+}
+
+.checks label input[type="checkbox"] {
+  width: auto !important;
+  margin: 0 !important;
+  flex: 0 0 auto;
+}
+
+/* Shift Master's add/edit form wrapper */
+.card {
+  background: var(--panel-raised); border: 1px solid var(--line); border-radius: var(--radius-lg);
+  padding: 16px; margin: 12px 0; box-shadow: var(--shadow-sm);
+}
+.card h3 { margin: 0 0 10px; font-size: 15px; }
+
+/* Mandatory-task display */
+.mandatory-tasks {
+  margin: 16px 0 12px;
+  text-align: left;
+}
+
+.mandatory-tasks h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.task-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 14px;
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+.task-item input[type="checkbox"] {
+  width: auto;
+  margin-top: 2px;
+  flex: 0 0 auto;
+}
+
+.task-warning {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  color: var(--status-bad);
+}
+
+.record-tasks {
+  margin-top: 8px;
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+.task-title {
+  display: block;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.task-done,
+.task-not-done {
+  display: block;
+}
+
+.task-done {
+  color: var(--status-good);
+}
+
+.task-not-done {
+  color: var(--status-bad);
+}
+
+.record-task-status {
+  margin-top: 3px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.record-task-status.done {
+  color: var(--status-good);
+}
+
+.record-task-status.not-done {
+  color: var(--status-bad);
+}
+
+.record-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.record-row {
+  align-items: flex-start;
+}

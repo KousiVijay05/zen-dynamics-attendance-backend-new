@@ -1,0 +1,25 @@
+/* View-level touches that don't belong in base or components. */
+
+/* Sync status is a real-time state, not branding — green while healthy/catching
+   up, red once actually offline. */
+.syncbar {
+  font-size: 12.5px; font-weight: 600; text-align: center; padding: 8px 10px; margin-bottom: 12px;
+  border-radius: var(--radius-sm); background: var(--status-good-soft); color: var(--status-good);
+  animation: fade-in .2s var(--ease);
+}
+.syncbar.off { background: var(--status-bad-soft); color: var(--status-bad); }
+
+/* The very first thing painted, before app.js has run — see the #root markup
+   in index.html. Branded so the earliest thing anyone sees is the logo, not
+   plain gray text. */
+.splash { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 60vh; gap: 14px; text-align: center; }
+.splash img { width: 72px; height: 72px; border-radius: var(--radius-md); box-shadow: var(--shadow-md); }
+.splash span { color: var(--ink2); font-size: 14px; }
+
+::selection { background: var(--gold-soft); color: var(--on-gold); }
+
+/* Larger, easier hit targets on touch devices specifically (mouse users keep the tighter defaults). */
+@media (pointer: coarse) {
+  .btn, .linkish, .tab { min-height: 44px; }
+  .key { min-height: 56px; }
+}

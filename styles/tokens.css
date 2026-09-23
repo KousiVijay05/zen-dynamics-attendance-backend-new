@@ -1,0 +1,81 @@
+/* ---------------------------------------------------------------
+   Design tokens — Zen & Dynamics brand palette.
+
+   Brand rule: black + white + gold, everywhere. --gold* is the ONLY
+   accent/CTA color in the app now. --status-good (green) and
+   --status-bad (warm red) are NOT brand colors — they're kept
+   strictly for real-time status meaning (inside/outside the
+   geofence, an open "on shift" indicator, a success message) per
+   the explicit exception for temporary status indicators. Nothing
+   decorative (buttons, tabs, focus rings, borders, headers) should
+   ever reference --status-good/--status-bad — if you're tempted to,
+   reach for --gold instead.
+----------------------------------------------------------------*/
+:root {
+  /* --- brand: black + white --- */
+  --paper: #FFFFFF;        /* page background */
+  --panel: #F7F6F2;        /* card background, a hair off white for depth */
+  --panel-raised: #FFFFFF; /* elevated surfaces (inputs, keys, person cards) */
+  --ink: #0A0A0A;          /* primary text / black brand element */
+  --ink2: #4A4A46;         /* secondary text */
+  --ink3: #8A8A85;         /* tertiary text */
+  --line: #E3E1D8;
+  --line2: #ECEAE3;
+
+  /* --- brand: gold accent + CTAs --- */
+  --gold: #E7B657;
+  --gold-strong: #B8892E;  /* hover/active */
+  --gold-soft: #FBF0D9;    /* tinted chip/background */
+  --on-gold: #171204;      /* text/icon color when sitting on a gold fill */
+
+  /* --- status only (see file header) --- */
+  --status-good: #1F7A4C;
+  --status-good-soft: #DFF3E7;
+  --status-bad: #B23B2E;
+  --status-bad-soft: #F7E2DD;
+
+  --ring-idle: var(--ink);
+
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
+  --shadow-sm: 0 1px 2px rgba(10, 10, 10, .07);
+  --shadow-md: 0 4px 14px rgba(10, 10, 10, .10);
+  --shadow-lg: 0 12px 32px rgba(10, 10, 10, .18);
+
+  --ease: cubic-bezier(.2, .7, .3, 1);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Dark mode stays on-brand: black becomes the background (it's one of
+       the two brand neutrals, not a departure from it), gold stays gold. */
+    --paper: #0B0B0A;
+    --panel: #161613;
+    --panel-raised: #1E1E1A;
+    --ink: #F7F6F2;
+    --ink2: #C7C5BC;
+    --ink3: #8C8B84;
+    --line: #302F29;
+    --line2: #262620;
+
+    --gold: #EFC170;
+    --gold-strong: #F4D28F;  /* lighter = "stronger" against a dark surface */
+    --gold-soft: #3A2E12;
+    --on-gold: #171204;
+
+    --status-good: #4CB878;
+    --status-good-soft: #163A26;
+    --status-bad: #E0836A;
+    --status-bad-soft: #3B241C;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .35);
+    --shadow-md: 0 4px 14px rgba(0, 0, 0, .4);
+    --shadow-lg: 0 12px 32px rgba(0, 0, 0, .5);
+  }
+}

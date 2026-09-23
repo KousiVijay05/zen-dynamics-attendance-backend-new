@@ -9,6 +9,7 @@
 
 import { state, geo, fenceState, emitChange } from "../core/store.js";
 import { metres } from "../utils/geomath.js";
+import { userIsTyping } from "../ui/dom.js";
 
 /**
  * Distance in metres from the device to the configured site, or
@@ -43,12 +44,12 @@ export function startWatch() {
   navigator.geolocation.watchPosition(function (p) {
     geo.ok = true; geo.err = null;
     geo.lat = p.coords.latitude; geo.lng = p.coords.longitude; geo.acc = p.coords.accuracy || 0;
-    if (state.view === "staff" || state.view === "signin") emitChange();
+    if ((state.view === "staff" || state.view === "signin") && !userIsTyping()) emitChange();
   }, function (e) {
     geo.ok = false;
     geo.err = e.code === 1 ? "Location permission is off. Allow it in your browser settings."
       : "No location fix yet. Move outdoors and wait a moment.";
-    if (state.view === "staff" || state.view === "signin") emitChange();
+    if ((state.view === "staff" || state.view === "signin") && !userIsTyping()) emitChange();
   }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 });
 }
 
@@ -78,6 +79,6 @@ export function startTick() {
   if (fenceState.ticking) return;
   fenceState.ticking = true;
   setInterval(function () {
-    if (state.view === "staff" || state.view === "signin") emitChange();
+    if ((state.view === "staff" || state.view === "signin") && !userIsTyping()) emitChange();
   }, 1000);
 }

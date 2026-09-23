@@ -221,3 +221,17 @@ placeholder:
   `org:config` key — no Apps Script / `Code.gs` changes needed.
 - Excel export gets a fifth sheet, "Leave" (every request, staff,
   dates, status, reason).
+
+## 2026-09-23 (later same day) — Fixed: couldn't pick a leave date
+- The staff screen re-renders every second (live shift timer) and on
+  every GPS position update, and `render()` replaces `#root`'s entire
+  `innerHTML` each time. That was destroying and recreating the leave
+  form's date inputs mid-interaction, closing an open native date
+  picker before a date could be selected — reported as "not able to
+  pick dates."
+- Fixed in `js/domain/geofence.js`: the tick interval and the
+  geolocation watch callback now skip `emitChange()` while an input/
+  textarea/select has focus (`js/ui/dom.js`'s new `userIsTyping()`).
+  Trade-off: the live seconds counter visually pauses while a field is
+  focused and resumes the moment it loses focus — confirmed correct,
+  not a regression.

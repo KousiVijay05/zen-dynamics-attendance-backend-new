@@ -1,8 +1,8 @@
 /* Bump CACHE whenever you change any app file, otherwise phones keep
-   serving the old version. Bumped to v7: added leave requests (staff
-   request, admin approve/reject, 15/year default, paid in payroll) and
-   caught up the precache list with shifts.js/leave.js, missed in v6. */
-const CACHE = "attendance-v7";
+   serving the old version. Bumped to v8: fixed the staff screen's
+   per-second re-render destroying focused form inputs mid-interaction
+   (couldn't pick a leave date — see CHANGES.md). */
+const CACHE = "attendance-v8";
 const ASSETS = [
   "./", "./index.html", "./manifest.json",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/mark.png", "./icons/logo-lockup.png",

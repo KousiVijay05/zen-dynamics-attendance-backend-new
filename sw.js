@@ -1,14 +1,14 @@
 /* Bump CACHE whenever you change any app file, otherwise phones keep
-   serving the old version. Bumped to v12: closed the hole where a
-   visitor landing on a stale/failed "Set up attendance" screen could
-   overwrite a real, already-set-up workplace (see CHANGES.md). */
-const CACHE = "attendance-v12";
+   serving the old version. Bumped to v13: replaced the visible-name
+   picker + PIN sign-in with a private username/password login and a
+   forced password change on first sign-in (see CHANGES.md). */
+const CACHE = "attendance-v13";
 const ASSETS = [
   "./", "./index.html", "./manifest.json",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/mark.png", "./icons/logo-lockup.png",
 
-  "./styles/tokens.css?v=12", "./styles/base.css?v=12",
-  "./styles/components.css?v=12", "./styles/views.css?v=12",
+  "./styles/tokens.css?v=13", "./styles/base.css?v=13",
+  "./styles/components.css?v=13", "./styles/views.css?v=13",
 
   "./js/app.js",
   "./js/core/config.js", "./js/core/store.js",
@@ -23,7 +23,7 @@ const ASSETS = [
   "./js/ui/views/admin/index.js", "./js/ui/views/admin/leave.js", "./js/ui/views/admin/onsite.js",
   "./js/ui/views/admin/payroll.js", "./js/ui/views/admin/people.js", "./js/ui/views/admin/records.js",
   "./js/ui/views/admin/settings.js", "./js/ui/views/admin/shifts.js",
-  "./js/ui/views/pin.js", "./js/ui/views/recover.js", "./js/ui/views/setup.js",
+  "./js/ui/views/changepw.js", "./js/ui/views/recover.js", "./js/ui/views/setup.js",
   "./js/ui/views/signin.js", "./js/ui/views/staff.js",
   "./js/utils/format.js", "./js/utils/geomath.js"
 ];

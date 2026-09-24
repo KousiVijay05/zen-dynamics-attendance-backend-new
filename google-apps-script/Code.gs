@@ -21,7 +21,7 @@
  *  SECURITY, READ THIS: the app is a static front end with SECRET
  *  shipped in its client JS. Anyone who has SECRET and this
  *  deployment's URL can call every action below directly, bypassing
- *  the app's PIN screen (which only gates the UI, not this API).
+ *  the app's sign-in screen (which only gates the UI, not this API).
  *  That's inherent to "static site + shared secret", not something
  *  this file can fully close. What's added below reduces the blast
  *  radius of a leaked secret and of accidental/malformed requests:
@@ -250,9 +250,10 @@ function rebuild() {
 
   writeSheet(SHIFTS_SHEET, rows);
 
-  /* Staff — PIN is deliberately left out of this sheet; it's already visible
-     to anyone who can open this spreadsheet, and there's no reason to also
-     put it in the one sheet meant to be glanced at/printed. */
+  /* Staff — password is deliberately left out of this sheet; it's already
+     visible to whoever can edit staff in the app (Admin -> People), and
+     there's no reason to also put it in the one sheet meant to be
+     glanced at/printed. */
   var staffRows = [["Name", "Monthly salary / rate", "Administrator", "Active", "Joined"]];
   roster.forEach(function (p) {
     staffRows.push([p.name, p.salary || 0, p.admin ? "Yes" : "", p.active === false ? "" : "Yes", p.joined || ""]);

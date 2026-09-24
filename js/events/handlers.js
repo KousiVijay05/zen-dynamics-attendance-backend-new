@@ -21,7 +21,7 @@ import { say, sayAndPaint } from "../ui/notify.js";
 import { startWatch, retryLocation } from "../domain/geofence.js";
 import {
   createWorkplace, createAdminRecovery, resetOrg, goToRecover, showAdminOnly,
-  pickForPin, backToSignin, pinBackspace, pinDigit, signOut
+  attemptLogin, changePassword, backToSignin, signOut
 } from "../domain/auth.js";
 import { clockIn, clockOut, loadAdminData, openEntryFor } from "../domain/attendance.js";
 import { addStaff, updateStaff, toggleActive, startEdit, cancelEdit } from "../domain/roster.js";
@@ -59,7 +59,8 @@ export function initEvents() {
     if (act === "createorg") {
       try {
         createWorkplace({
-          org: $("f_org").value, name: $("f_nm").value, pin: $("f_pin").value,
+          org: $("f_org").value, name: $("f_nm").value,
+          username: $("f_user").value, password: $("f_pass").value,
           lat: parseFloat($("f_lat").value), lng: parseFloat($("f_lng").value),
           radius: parseInt($("f_rad").value, 10)
         }).catch(function (err) { say(err.message); });
@@ -71,7 +72,9 @@ export function initEvents() {
 
     if (act === "makeadmin") {
       try {
-        createAdminRecovery({ name: $("r_nm").value, pin: $("r_pin").value }).catch(function (err) { say(err.message); });
+        createAdminRecovery({
+          name: $("r_nm").value, username: $("r_user").value, password: $("r_pass").value
+        }).catch(function (err) { say(err.message); });
       } catch (err) { say(err.message); }
       return;
     }
@@ -84,10 +87,23 @@ export function initEvents() {
 
     if (act === "adminonly") { showAdminOnly(true); return; }
     if (act === "alluser") { showAdminOnly(false); return; }
-    if (act === "pick") { pickForPin(id); return; }
     if (act === "back") { backToSignin(); return; }
-    if (act === "del") { pinBackspace(); return; }
-    if (act === "dig") { pinDigit(v); return; }
+
+    if (act === "credlogin") {
+      try {
+        attemptLogin({ username: $("li_user").value, password: $("li_pass").value });
+      } catch (err) { say(err.message); }
+      return;
+    }
+
+    if (act === "changepw") {
+      try {
+        changePassword({ password: $("cp_pass").value, confirm: $("cp_confirm").value })
+          .catch(function (err) { say(err.message); });
+      } catch (err) { say(err.message); }
+      return;
+    }
+
 if (act === "tasktoggle") {
   var taskIndex = Number(t.getAttribute("data-task-index"));
   var openForTasks = state.me ? openEntryFor(state.me.id) : null;
@@ -160,7 +176,8 @@ var selectedTasks = $("e_tasks").value
   });
     updateStaff(state.editId, {
       name: $("e_name").value,
-      pin: $("e_pin").value,
+      username: $("e_user").value,
+      password: $("e_pass").value,
       salary: $("e_sal").value,
       admin: $("e_admin").checked,
    shifts: selectedShifts,
@@ -207,7 +224,8 @@ tasks: selectedTasks
     if (act === "addperson") {
       try {
         addStaff({
-          name: $("n_name").value, pin: $("n_pin").value, salary: $("n_sal").value, admin: $("n_admin").checked
+          name: $("n_name").value, username: $("n_user").value, password: $("n_pass").value,
+          salary: $("n_sal").value, admin: $("n_admin").checked
         }).then(function (msg) { sayAndPaint(msg, true); }).catch(function (err) { say(err.message); });
       } catch (err) { say(err.message); }
       return;

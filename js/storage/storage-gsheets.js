@@ -25,9 +25,9 @@
    WEB_APP_URL and SECRET below ship inside this file's source, which
    is downloaded to every visitor's browser. Anyone who views page
    source gets both and can call the Apps Script endpoint directly —
-   bypassing the app's PIN screen entirely, since PINs only gate the
-   UI, not this data layer. That is a property of any purely static
-   front end talking to a shared-secret backend; no amount of
+   bypassing the app's sign-in screen entirely, since usernames and
+   passwords only gate the UI, not this data layer. That is a property
+   of any purely static front end talking to a shared-secret backend; no amount of
    minifying or hiding this file changes it. Two things you *can* do:
      1. Treat SECRET as a rotate-if-leaked credential, not a real
         password — change it in both this file and Code.gs if you

@@ -106,8 +106,9 @@ installed phones pick up the update instead of serving a stale cached copy.
 
 1. **Open the app.** No workplace exists yet, so you land on "Set up
    attendance".
-2. **Workplace name + your name + a 4-digit PIN.** You become the first
-   administrator.
+2. **Workplace name + your name + a user ID and password.** You become the
+   first administrator, and you choose your own password right away — no
+   forced change.
 3. **Site coordinates.** Either type latitude/longitude, or stand where
    staff will actually clock in and tap "Use my location" (needs location
    permission granted in the browser).
@@ -122,13 +123,17 @@ installed phones pick up the update instead of serving a stale cached copy.
 7. **Admin → Settings**: adjust the geofence radius, whether the app locks
    entirely outside the zone, the auto-clock-out grace period, whether
    admins can sign in from anywhere, and demo mode (see Testing GPS below).
-8. **Admin → People → Add someone** for each staff member: name, 4-digit
-   PIN, salary/rate, and whether they can administer.
+8. **Admin → People → Add someone** for each staff member: name, a user ID,
+   a temporary password, and salary/rate/admin. They're asked to pick
+   their own password the first time they sign in — the temporary one
+   only works once. You (the admin) can always see or reset anyone's
+   current password from their edit screen if they lose it.
 
-If everyone with admin rights is ever deactivated or their PIN forgotten
-beyond recovery, the sign-in screen has a **"Recover administrator
-access"** link (shown automatically whenever no active administrator
-exists) that lets you create a new admin without losing any records.
+If everyone with admin rights is ever deactivated or every admin's
+password is lost beyond recovery, the sign-in screen has a **"Recover
+administrator access"** link (shown automatically whenever no active
+administrator exists) that lets you create a new admin without losing
+any records.
 
 ## Testing GPS / geofencing
 
@@ -183,14 +188,21 @@ Records.
 ## Security
 
 Read this before you rely on this app for anything sensitive. The
-short version: **the PIN screen is a UI convenience, not a real access
-control.** The only actual gate on who can read or write your data is
-`SECRET` — and `SECRET` ships inside `js/storage/storage-gsheets.js`,
-which is downloaded to every visitor's browser. Anyone who views page
-source has it, and with it, full read/write access to the whole
-spreadsheet through the Apps Script endpoint directly — no PIN needed.
-This is true of any purely static front end talking to a shared-secret
-backend; it is not something obfuscating or minifying the JS fixes.
+short version: **the sign-in screen is a UI convenience, not a real
+access control.** The only actual gate on who can read or write your
+data is `SECRET` — and `SECRET` ships inside
+`js/storage/storage-gsheets.js`, which is downloaded to every visitor's
+browser. Anyone who views page source has it, and with it, full
+read/write access to the whole spreadsheet through the Apps Script
+endpoint directly — no username or password needed. This is true of
+any purely static front end talking to a shared-secret backend; it is
+not something obfuscating or minifying the JS fixes.
+
+Also worth knowing: usernames and passwords are stored in plaintext in
+`org:roster`, deliberately — an admin can see and reset anyone's
+password from Admin → People, which only works if it isn't hashed. If
+that trade-off doesn't suit your workplace, that's a design decision
+to revisit explicitly, not a bug.
 
 What this rebuild does to reduce the actual risk, without replacing the
 architecture (which you asked me not to do):
@@ -202,20 +214,22 @@ architecture (which you asked me not to do):
   This stops accidental or malicious garbage from reaching your sheet or
   blowing through your daily Apps Script quota — it does not stop someone
   who has `SECRET` from reading or editing legitimate-looking data.
-- **PIN not included in the readable `Staff` sheet** (this was already
-  true in the original — confirmed and kept).
+- **Password not included in the readable `Staff` sheet or the Excel
+  export** (this was already true of PINs in the original — kept, and
+  applied the same way to passwords).
 
 What I deliberately did **not** implement, and why:
 
-- **PIN hashing.** I considered it, but decided against silently changing
-  it: any hashing scheme needs a migration story for PINs already saved in
-  someone's existing sheet, and since PINs currently reach the server only
-  as part of the whole roster blob (not as a standalone "login" call), a
-  hash mostly protects against someone reading the raw sheet — which
-  `SECRET` exposure already defeats more directly. If you want this
-  anyway (e.g., to protect against a curious co-admin who can see the
-  sheet but not `SECRET`), it's a contained change — happy to add it as a
-  follow-up with an explicit migration step.
+- **Password hashing.** Deliberately not done: the admin being able to
+  see and reset anyone's current password from Admin → People (this
+  app's actual account-recovery mechanism, since there's no email to
+  send a reset link to) requires storing it in a form the admin can
+  read back, which a hash by definition prevents. Hashing would also
+  need a migration story for accounts that already have a plaintext
+  password saved. If you want this anyway — accepting that "forgot my
+  password" then has no self-serve recovery path — it's a contained
+  change, happy to add it as a follow-up with an explicit migration
+  step.
 - **Real per-user authentication.** The only way to actually close the
   "anyone with SECRET has full access" gap is to put real auth in front of
   the Apps Script endpoint — e.g., restricting the deployment to a Google

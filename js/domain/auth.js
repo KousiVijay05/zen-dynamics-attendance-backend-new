@@ -1,12 +1,21 @@
 /* ---------------------------------------------------------------
-   Authentication: PIN entry/sign-in/sign-out, and the two recovery
-   flows (first-run workplace setup, "no administrator left").
+   Authentication: username/password sign-in, forced password change
+   on first login, and the two recovery flows (first-run workplace
+   setup, "no administrator left").
 
-   Ported from the corresponding event-handler branches of the
-   original app.js ("createorg", "recover", "makeadmin", "resetorg",
-   "adminonly", "alluser", "pick", "back", "del", "dig", "signout",
-   plus the signIn() helper). Validation messages are copied
-   word-for-word so existing users see exactly the same prompts.
+   Replaces the original tap-your-name-then-PIN flow: the sign-in
+   screen no longer lists staff names at all (anyone with the link
+   could see the whole roster before), and each person now has their
+   own admin-assigned username + password instead of a shared-visible
+   4-digit PIN.
+
+   SECURITY NOTE, same honesty as the rest of this app: passwords are
+   stored in plaintext in org:roster, same as PINs always were — see
+   README's Security section. This is a deliberate choice (the admin
+   is meant to be able to see/reset anyone's password, e.g. if they
+   forget it), not an oversight. It does not add real per-user backend
+   authentication; SECRET is still the only actual gate on the data
+   layer, and it still ships in this deployed page's client JS.
 
    Design note: these functions read already-parsed arguments, never
    the DOM — js/events/handlers.js is the only place that reads
@@ -22,20 +31,30 @@ import { defaultPay } from "../core/config.js";
 import { startWatch, startTick } from "./geofence.js";
 import { loadLog } from "./attendance.js";
 
-var PIN_RE = /^\d{4}$/;
+var PASSWORD_MIN = 4;
 
 function saveCfg() { return sset("org:config", state.cfg, true); }
 function saveRoster() { return sset("org:roster", state.roster, true); }
+
+function normUsername(u) { return (u || "").trim().toLowerCase(); }
+
+function findByUsername(username) {
+  var u = normUsername(username);
+  if (!u) return null;
+  return state.roster.filter(function (x) { return normUsername(x.username) === u; })[0] || null;
+}
 
 /** First-run: create the workplace, its site geofence, and the first administrator. */
 export function createWorkplace(fields) {
   var org = (fields.org || "").trim();
   var nm = (fields.name || "").trim();
-  var pin = (fields.pin || "").trim();
+  var username = normUsername(fields.username);
+  var password = (fields.password || "").trim();
   var la = fields.lat, ln = fields.lng, rad = fields.radius;
 
   if (!org || !nm) throw new Error("Enter a workplace name and your name.");
-  if (!PIN_RE.test(pin)) throw new Error("The PIN must be exactly 4 digits.");
+  if (!username) throw new Error("Choose a user ID.");
+  if (password.length < PASSWORD_MIN) throw new Error("The password must be at least " + PASSWORD_MIN + " characters.");
   if (!isFinite(la) || !isFinite(ln) || Math.abs(la) > 90 || Math.abs(ln) > 180) {
     throw new Error("Set the site coordinates first.");
   }
@@ -66,7 +85,12 @@ export function createWorkplace(fields) {
       site: { lat: la, lng: ln, radius: isFinite(rad) && rad >= 10 ? rad : 100 },
       lockOutside: true, graceMin: 0, adminAnywhere: true, demo: false, pay: defaultPay(), shifts: [], leaves: []
     };
-    state.roster = [{ id: uid(), name: nm, pin: pin, admin: true, active: true, salary: 0, joined: dayKey(Date.now()) }];
+    /* The first admin sets their own password right now, so unlike staff
+       added later there's nothing to force-change on next login. */
+    state.roster = [{
+      id: uid(), name: nm, username: username, password: password, mustChangePassword: false,
+      admin: true, active: true, salary: 0, joined: dayKey(Date.now())
+    }];
     state.msg = "";
 
     return Promise.all([saveCfg(), saveRoster()]).then(function () { return signIn(state.roster[0]); });
@@ -76,13 +100,18 @@ export function createWorkplace(fields) {
 /** "No administrator found" recovery screen: adds a fresh admin without touching existing records. */
 export function createAdminRecovery(fields) {
   var rn = (fields.name || "").trim();
-  var rp = (fields.pin || "").trim();
+  var ru = normUsername(fields.username);
+  var rp = (fields.password || "").trim();
 
   if (!rn) throw new Error("Enter a name.");
-  if (!PIN_RE.test(rp)) throw new Error("The PIN must be exactly 4 digits.");
-  if (state.roster.some(function (x) { return x.pin === rp; })) throw new Error("Someone already uses that PIN — pick another.");
+  if (!ru) throw new Error("Choose a user ID.");
+  if (rp.length < PASSWORD_MIN) throw new Error("The password must be at least " + PASSWORD_MIN + " characters.");
+  if (findByUsername(ru)) throw new Error("Someone already uses that user ID — pick another.");
 
-  var fresh = { id: uid(), name: rn, pin: rp, admin: true, active: true, salary: 0, joined: dayKey(Date.now()) };
+  var fresh = {
+    id: uid(), name: rn, username: ru, password: rp, mustChangePassword: false,
+    admin: true, active: true, salary: 0, joined: dayKey(Date.now())
+  };
   state.roster.push(fresh);
 
   return saveRoster()
@@ -110,46 +139,74 @@ export function resetOrg() {
 
 export function goToRecover() { state.view = "recover"; state.msg = ""; emitChange(); }
 
-export function showAdminOnly(on) { state.adminOnly = !!on; emitChange(); }
+/** Reveals the login form despite a geofence lock (only an admin's credentials will actually get them in). */
+export function showAdminOnly(on) { state.adminOnly = !!on; state.msg = ""; emitChange(); }
 
-export function pickForPin(id) {
-  state.pinFor = id; state.pinBuf = ""; state.msg = ""; state.view = "pin";
-  emitChange();
-}
+/**
+ * Checks a username/password against the roster. On success: routes to
+ * the forced password-change screen if this account still has a
+ * temporary password, otherwise signs straight in. On failure, one
+ * generic message regardless of whether the username or the password
+ * was wrong — doesn't confirm which usernames exist.
+ */
+export function attemptLogin(fields) {
+  var username = fields.username, password = (fields.password || "").trim();
+  var p = findByUsername(username);
+  var ok = p && p.active !== false && p.password === password;
 
-export function backToSignin() {
-  state.view = "signin"; state.msg = "";
-  emitChange();
-}
+  if (!ok) {
+    state.msg = "User ID or password is incorrect."; state.msgOk = false;
+    emitChange();
+    return Promise.resolve();
+  }
 
-export function pinBackspace() {
-  state.pinBuf = state.pinBuf.slice(0, -1);
-  emitChange();
+  /* The geofence lock only ever let admins bypass it (adminAnywhere) —
+     a non-admin whose credentials happen to be correct while the app is
+     showing the locked screen still isn't allowed through here. */
+  if (state.adminOnly && !p.admin) {
+    state.msg = "Only administrators can sign in while outside the site.";
+    state.msgOk = false;
+    emitChange();
+    return Promise.resolve();
+  }
+
+  if (p.mustChangePassword) {
+    state.changePwFor = p.id; state.view = "changepw"; state.msg = "";
+    emitChange();
+    return Promise.resolve();
+  }
+
+  return signIn(p);
 }
 
 /**
- * Appends a PIN digit. Once 4 digits are entered, checks it against
- * the selected person and either signs in or shows "doesn't match".
+ * Forced (or admin-reset-triggered) password change. `fields` =
+ * { password, confirm }. Applies to state.changePwFor, then signs in.
  */
-export function pinDigit(v) {
-  if (state.pinBuf.length >= 4) return;
-  state.pinBuf += v;
+export function changePassword(fields) {
+  var pw = (fields.password || "").trim();
+  var confirm = (fields.confirm || "").trim();
+  var p = state.roster.filter(function (x) { return x.id === state.changePwFor; })[0];
+  if (!p) { state.view = "signin"; state.msg = ""; emitChange(); return Promise.resolve(); }
+
+  if (pw.length < PASSWORD_MIN) throw new Error("The password must be at least " + PASSWORD_MIN + " characters.");
+  if (pw !== confirm) throw new Error("Passwords don't match.");
+
+  p.password = pw;
+  p.mustChangePassword = false;
+  state.changePwFor = null;
+
+  return saveRoster().then(function () { return signIn(p); });
+}
+
+export function backToSignin() {
+  state.view = "signin"; state.msg = ""; state.adminOnly = false;
   emitChange();
-  if (state.pinBuf.length === 4) {
-    var pp = state.roster.filter(function (x) { return x.id === state.pinFor; })[0];
-    if (pp && pp.pin === state.pinBuf) {
-      signIn(pp);
-    } else {
-      state.pinBuf = "";
-      state.msg = "That PIN doesn't match. Try again."; state.msgOk = false;
-      emitChange();
-    }
-  }
 }
 
 /** Signs a person in: sets state.me, remembers the device, and warms up their logs. */
 export function signIn(p) {
-  state.me = p; state.view = "staff"; state.pinBuf = ""; state.pinFor = null; state.msg = ""; state.adminOnly = false;
+  state.me = p; state.view = "staff"; state.msg = ""; state.adminOnly = false;
   sset("device:last", { id: p.id }, false);
   return Promise.all([loadLog(p.id, Date.now()), loadLog(p.id, Date.now() - 40 * 864e5)]).then(function () {
     emitChange();

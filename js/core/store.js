@@ -21,10 +21,12 @@ import { ymKey } from "../utils/format.js";
 export var state = {
   view: "boot", cfg: null, roster: [], me: null,
   tab: "onsite", paySub: "rules",
-  pinFor: null, pinBuf: "", msg: "", msgOk: false,
+  msg: "", msgOk: false,
   logs: {}, adminLoaded: false,
   period: "week", month: ymKey(Date.now()), recPerson: "all",
   editId: null, editShiftId: null, adminOnly: false,
+  /* id of the roster entry mid-forced-password-change (view === "changepw") */
+  changePwFor: null,
   /* fatal boot/render error, shown by the error-boundary view instead of a blank screen */
   fatal: null
 };

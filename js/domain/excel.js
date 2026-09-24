@@ -36,9 +36,13 @@ function buildWorkbook() {
       });
   });
 
-  var staff = [["Name", "PIN", P.basis === "monthly" ? "Monthly salary" : "Hourly rate", "Administrator", "Active"]];
+  /* Password deliberately left out, same reasoning Code.gs already applies to the
+     live Sheet's Staff tab for PINs: an exported file gets shared/stored more
+     loosely than the admin-only People tab, where the current password is still
+     visible on request. */
+  var staff = [["Name", "User ID", P.basis === "monthly" ? "Monthly salary" : "Hourly rate", "Administrator", "Active"]];
   state.roster.forEach(function (p) {
-    staff.push([p.name, p.pin, p.salary || 0, p.admin ? "Yes" : "", p.active === false ? "" : "Yes"]);
+    staff.push([p.name, p.username || "", p.salary || 0, p.admin ? "Yes" : "", p.active === false ? "" : "Yes"]);
   });
 
   var names = {};

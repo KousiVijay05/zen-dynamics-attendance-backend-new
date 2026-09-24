@@ -11,7 +11,7 @@ import { state } from "../core/store.js";
 import { vSetup } from "./views/setup.js";
 import { vRecover } from "./views/recover.js";
 import { vSignin } from "./views/signin.js";
-import { vPin } from "./views/pin.js";
+import { vChangePw } from "./views/changepw.js";
 import { vStaff } from "./views/staff.js";
 import { vAdmin } from "./views/admin/index.js";
 import { syncBanner } from "./components/syncStatus.js";
@@ -24,7 +24,7 @@ export function render() {
   try {
     if (state.fatal) { html = errorScreen(state.fatal); root.innerHTML = html; return; }
     html = view();
-    if (state.view === "staff" || state.view === "admin" || state.view === "signin") html = syncBanner() + html;
+    if (state.view === "staff" || state.view === "admin" || state.view === "signin" || state.view === "changepw") html = syncBanner() + html;
   } catch (err) {
     console.error("Render failed:", err);
     state.fatal = err;
@@ -37,7 +37,7 @@ function view() {
   if (state.view === "setup") return vSetup();
   if (state.view === "recover") return vRecover();
   if (state.view === "signin") return vSignin();
-  if (state.view === "pin") return vPin();
+  if (state.view === "changepw") return vChangePw();
   if (state.view === "staff") return vStaff();
   if (state.view === "admin") return vAdmin();
   return '<div class="splash"><img src="icons/mark.png" width="72" height="72" alt="Zen & Dynamics" /><span>Loading…</span></div>';

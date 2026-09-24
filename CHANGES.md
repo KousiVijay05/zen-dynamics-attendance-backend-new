@@ -320,3 +320,73 @@ one's window, but real protection against a deliberate attacker
 requires either real per-user backend authentication or restricting who
 ever receives this link. Worth deciding whether that's needed for how
 this app is actually being shared.
+
+## 2026-09-24 (later) — Username/password sign-in, replaces the name picker
+
+**Why:** the sign-in screen used to list every active staff member's
+name in a public grid — anyone with the link could see who works here
+before signing in at all. Combined with the PIN being a shared,
+low-entropy 4 digits, this was a bigger exposure than a small
+workplace tool needs. Each person now has an admin-assigned username
+and password instead.
+
+**What changed:**
+- `vSignin()` (`js/ui/views/signin.js`) no longer lists any names —
+  just a User ID + Password form. The geofence-lock behavior is
+  unchanged: outside the site, the form stays hidden behind the locked
+  screen unless "Administrator sign-in" is tapped, and even then only
+  an admin's credentials actually get through
+  (`js/domain/auth.js#attemptLogin`).
+- **Forced password change on first login.** A brand-new account (or
+  one an admin just reset) has `mustChangePassword: true`; a correct
+  login routes to a new screen (`js/ui/views/changepw.js`) instead of
+  the dashboard, and there's no way to skip it. The very first admin,
+  created during workplace setup, picks their own password up front —
+  nothing to force-change there.
+- **Admin visibility, on purpose.** Passwords are stored in plaintext
+  in `org:roster`, exactly like PINs always were (see README's
+  Security section) — the admin can see and reset anyone's password
+  from Admin → People. Editing a person's password field to a
+  *different* value there is itself a reset: `mustChangePassword`
+  flips back to `true`, so they're asked to pick their own again next
+  time. Saving the form with the field unchanged doesn't touch it.
+  Passwords are deliberately left out of the Excel export and the
+  live Sheet's readable "Staff" tab, same reasoning as PINs before —
+  visible to whoever manages staff in the app, not baked into a file
+  that gets shared more loosely.
+- `js/ui/views/pin.js` (the PIN keypad) is gone — nothing routes to it
+  anymore. `js/core/store.js`'s `pinFor`/`pinBuf` fields are gone too,
+  replaced by `changePwFor` (which roster id is mid-forced-change).
+- **No backend changes.** `Code.gs` never read individual roster
+  fields — it stores/retrieves the whole JSON blob — so this shipped
+  without touching or redeploying the Apps Script project. Its
+  comments were updated to stop saying "PIN screen" for accuracy, but
+  that's text only.
+- **Existing staff migrated**, not left locked out: everyone in the
+  live roster got a generated username + temporary password (handed
+  to the admin out of band, not committed anywhere), with
+  `mustChangePassword: true` so each picks their own on first use.
+  Nothing else about their records (shifts, tasks, salary, join date)
+  was touched.
+
+**Tested:** 31 automated scenarios across first-time setup validation,
+the existing-workplace overwrite guard, login success/failure paths
+(wrong username, wrong password, deactivated account, case
+sensitivity), the forced password-change flow end to end (including
+old-password-rejected-after-change), admin People-tab behavior
+(visible/editable password, reset detection, duplicate-username
+rejection), the geofence-lock + admin-bypass interaction, and a
+regression pass over clock-in/out, leave requests, and Shift Master —
+all against an isolated local copy, not the live workplace. 31/31
+passed. Excel export's Username-not-PIN column change was verified by
+code inspection only; the XLSX CDN is blocked in this sandbox (noted
+earlier in this file), and the export flow itself was already
+confirmed working against production before this change.
+
+**What this still doesn't do:** this is not real per-user backend
+authentication — same `SECRET`-in-client-JS caveat as everything else
+in this app (see README's Security section, and the entry above this
+one). It raises the bar against casual/accidental exposure
+significantly; it does not stop someone who deliberately extracts
+`SECRET` from the deployed page's source from calling the Apps Script
+endpoint directly, bypassing this login screen entirely.

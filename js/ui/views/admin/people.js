@@ -47,7 +47,9 @@ availableShifts.forEach(function (s) {
 '<label><input type="checkbox" class="e_workday" value="Sun" ' + (workDays.indexOf("Sun") >= 0 ? "checked" : "") + '> Sun</label>' +
 '</div></div>' +
         '<div class="field"><label for="e_name">Name</label><input id="e_name" type="text" value="' + esc(p.name) + '" /></div>' +
-        '<div class="field"><label for="e_pin">PIN</label><input id="e_pin" class="num" type="number" value="' + esc(p.pin) + '" /></div>' +
+        '<div class="field"><label for="e_user">User ID</label><input id="e_user" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" value="' + esc(p.username || "") + '" /></div>' +
+        '<div class="field"><label for="e_pass">Password</label><input id="e_pass" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" value="' + esc(p.password || "") + '" />' +
+        '<span class="note">Visible so you can look it up for them. Change it here to reset it — they\'ll be asked to pick a new one next time they sign in.</span></div>' +
         '<div class="field"><label for="e_sal">' + (state.cfg.pay.basis === "monthly" ? "Monthly salary" : "Hourly rate") + '</label>' +
         '<input id="e_sal" class="num" type="number" value="' + (p.salary || 0) + '" /></div>' +
         '<label class="check"><input type="checkbox" id="e_admin"' + (p.admin ? " checked" : "") + " /><div>Can administer</div></label>" +
@@ -63,14 +65,18 @@ availableShifts.forEach(function (s) {
     html += '<div class="row"><span><span class="who">' + esc(p.name) + "</span>" +
       (p.admin ? '<span class="tag admin">admin</span>' : "") +
       (p.active === false ? '<span class="tag">inactive</span>' : "") +
-      '<br><span class="meta">PIN ' + esc(p.pin) + " · " + (p.salary ? money(p.salary) + (state.cfg.pay.basis === "monthly" ? "/month" : "/hour") : "no pay set") +
+      '<br><span class="meta">' + esc(p.username || "no user ID") +
+      (p.mustChangePassword ? '<span class="tag pending">must change password</span>' : "") + " · " +
+      (p.salary ? money(p.salary) + (state.cfg.pay.basis === "monthly" ? "/month" : "/hour") : "no pay set") +
       "</span></span><span>" +
       '<button class="btn quiet small" data-act="edit" data-id="' + p.id + '">Edit</button> ' +
       '<button class="btn quiet small" data-act="toggleactive" data-id="' + p.id + '">' + (p.active === false ? "Restore" : "Off") + "</button></span></div>";
   });
   html += "</div><h2>Add someone</h2>" +
     '<div class="field"><label for="n_name">Name</label><input id="n_name" type="text" placeholder="Full name" /></div>' +
-    '<div class="field"><label for="n_pin">4-digit PIN</label><input id="n_pin" class="num" type="number" inputmode="numeric" placeholder="0000" /></div>' +
+    '<div class="field"><label for="n_user">User ID</label><input id="n_user" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="e.g. jsmith" /></div>' +
+    '<div class="field"><label for="n_pass">Temporary password</label><input id="n_pass" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="At least 4 characters" />' +
+    '<span class="note">Give this to them along with their user ID — they\'ll be asked to pick their own password the first time they sign in.</span></div>' +
     '<div class="field"><label for="n_sal">' + (state.cfg.pay.basis === "monthly" ? "Monthly salary" : "Hourly rate") + '</label>' +
     '<input id="n_sal" class="num" type="number" placeholder="0" /></div>' +
     '<label class="check"><input type="checkbox" id="n_admin" /><div>Can administer<span>Sees everyone\'s records, payroll and settings.</span></div></label>' +

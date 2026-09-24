@@ -106,25 +106,43 @@ export function createAdminRecovery(fields) {
   if (!rn) throw new Error("Enter a name.");
   if (!ru) throw new Error("Choose a user ID.");
   if (rp.length < PASSWORD_MIN) throw new Error("The password must be at least " + PASSWORD_MIN + " characters.");
-  if (findByUsername(ru)) throw new Error("Someone already uses that user ID — pick another.");
 
-  var fresh = {
-    id: uid(), name: rn, username: ru, password: rp, mustChangePassword: false,
-    admin: true, active: true, salary: 0, joined: dayKey(Date.now())
-  };
-  state.roster.push(fresh);
+  /* Same reasoning as createWorkplace()'s guard: this screen can appear (or
+     get lingered on) with a stale in-memory state.roster — a fetch failure
+     at boot, a snapshot from before other devices' changes synced in, or
+     simply an open tab that's been sitting on this screen for a while.
+     Pushing onto and saving THAT roster would silently discard whatever
+     really exists server-side. Force a fresh pull and rebuild the push on
+     top of it, not on top of whatever's in memory. This is also where the
+     real fix for a real incident landed: a stale roster here once
+     overwrote real staff's usernames/passwords with an outdated copy. */
+  return (window.storageSync ? window.storageSync() : Promise.resolve()).then(function () {
+    return sget("org:roster", true);
+  }).then(function (freshRoster) {
+    var roster = Array.isArray(freshRoster) ? freshRoster : (state.roster || []);
+    if (roster.some(function (x) { return normUsername(x.username) === ru; })) {
+      throw new Error("Someone already uses that user ID — pick another.");
+    }
 
-  return saveRoster()
-    .then(function () { return sget("org:roster", true); })
-    .then(function (back) {
-      if (!back || !back.length) {
-        state.msg = "The staff list didn't save. Try once more."; state.msgOk = false;
-        emitChange();
-        return;
-      }
-      state.roster = back;
-      return signIn(state.roster.filter(function (x) { return x.id === fresh.id; })[0] || fresh);
-    });
+    var fresh = {
+      id: uid(), name: rn, username: ru, password: rp, mustChangePassword: false,
+      admin: true, active: true, salary: 0, joined: dayKey(Date.now())
+    };
+    roster.push(fresh);
+    state.roster = roster;
+
+    return saveRoster()
+      .then(function () { return sget("org:roster", true); })
+      .then(function (back) {
+        if (!back || !back.length) {
+          state.msg = "The staff list didn't save. Try once more."; state.msgOk = false;
+          emitChange();
+          return;
+        }
+        state.roster = back;
+        return signIn(state.roster.filter(function (x) { return x.id === fresh.id; })[0] || fresh);
+      });
+  });
 }
 
 /** Deletes the workplace, its roster and every record. Caller is responsible for confirming with the user first. */

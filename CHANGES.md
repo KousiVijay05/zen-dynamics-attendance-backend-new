@@ -390,3 +390,70 @@ one). It raises the bar against casual/accidental exposure
 significantly; it does not stop someone who deliberately extracts
 `SECRET` from the deployed page's source from calling the Apps Script
 endpoint directly, bypassing this login screen entirely.
+
+## 2026-09-24 (same day, hours later) — Fixed: recovery flow corrupted real accounts
+
+**What happened:** within hours of the username/password redesign
+shipping, the real workplace's staff lost the ability to sign in — a
+roster read showed one real staff member's account (`kousi`) replaced
+by a near-duplicate with a different internal id, a 4-character
+password, and `mustChangePassword: false`, while the other five had
+silently lost their `username`/`password` fields entirely, reverting
+to look like pre-migration records.
+
+**Root cause, two compounding bugs, both introduced in the redesign
+earlier the same day:**
+1. `createAdminRecovery()` (the "no administrator found" / "Recover
+   administrator access" flow) pushed onto and saved whatever
+   `state.roster` happened to already be sitting in memory — not a
+   fresh fetch. If that in-memory copy predated the credential
+   migration (a stale local snapshot, a tab that had been open a
+   while, a fetch race at boot — same family of issue as the
+   `createWorkplace()` overwrite guard from earlier today), completing
+   this flow saved that *stale* roster back over the real one,
+   discarding the migration.
+2. Separately, and worse: `vSignin()` was changed to show "Recover
+   administrator access" as a permanent, always-clickable link on the
+   ordinary sign-in screen. The original app only ever surfaced this
+   entry point when it was actually relevant (empty roster, or
+   automatically via `app.js`'s boot() when no active admin exists at
+   all) — that gating was lost when the name-picker grid it depended
+   on was removed. Combined with bug 1, anyone who landed on the
+   sign-in screen — including a legitimate user confused by the new
+   login form — could reach a flow that grants a brand-new admin
+   account with no existing credentials required, and (until fixed)
+   could silently corrupt the real roster while doing it.
+
+**Fix:**
+- `createAdminRecovery()` (`js/domain/auth.js`) now forces a fresh
+  `window.storageSync()` + `sget("org:roster")` before checking
+  username uniqueness or saving, exactly mirroring
+  `createWorkplace()`'s existing guard. A collision against the *real*
+  current data is now correctly rejected instead of silently
+  overwritten.
+- `vSignin()` (`js/ui/views/signin.js`) no longer shows "Recover
+  administrator access" on a clean sign-in screen. It only appears
+  after an actual failed sign-in attempt on that screen — someone has
+  to try real credentials first, not just land on the page. The
+  genuine "no admin left at all" case is unaffected: `app.js`'s
+  boot() already routes straight to this same recovery screen
+  automatically in that situation, no link needed.
+- Real data was repaired: removed the accidental duplicate `kousi`
+  entry, re-applied the correct username/password to all six real
+  staff, verified against a fresh read.
+
+**Tested:** 5 new automated scenarios (recover link absent on a clean
+screen, appears only after a failed attempt, duplicate username via
+recovery correctly rejected against fresh data, original admin
+unaffected by the rejected attempt, a genuinely new non-colliding
+recovery still succeeds) plus a smoke check of the ordinary login and
+clock-in path — all against an isolated local copy, all passing, zero
+console/page errors. Verified live against production afterward
+(read-only) that the real roster held six entries with correct
+usernames after redeploy.
+
+**Lesson applied going forward:** any UI element that becomes reachable
+after a redesign — not just the data-writing function behind it — gets
+checked for whether the ORIGINAL app gated its visibility for a
+reason, before assuming a straight port of "what it does when clicked"
+was the whole story.

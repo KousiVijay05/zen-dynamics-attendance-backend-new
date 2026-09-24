@@ -18,12 +18,22 @@ export function vSignin() {
       (state.cfg.adminAnywhere ? '<div style="text-align:center"><button class="linkish" data-act="adminonly">Administrator sign-in</button></div>' : "");
   }
 
+  /* "Recover administrator access" only appears after an actual failed
+     sign-in attempt on THIS screen — not as a standing, always-clickable
+     option. It grants whoever completes it a brand-new admin account
+     with no existing credentials required, so it shouldn't be one tap
+     away from a page anyone with the link can open. The genuine "every
+     admin account is gone" case is still handled automatically —
+     app.js's boot() routes straight to this same recovery screen on its
+     own when that's true, no link needed. */
+  var failedAttempt = state.msg === "User ID or password is incorrect." || state.msg === "Only administrators can sign in while outside the site.";
+
   return head + (locked ? proxBlock() : "") +
     "<h2>Sign in</h2>" +
     '<div class="field"><label for="li_user">User ID</label><input id="li_user" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="username" /></div>' +
     '<div class="field"><label for="li_pass">Password</label><input id="li_pass" type="password" autocomplete="current-password" /></div>' +
     '<div class="btnrow"><button class="btn go wide" data-act="credlogin">Sign in</button></div>' +
     (state.adminOnly ? '<div style="text-align:center"><button class="linkish" data-act="alluser">Back</button></div>' : "") +
-    '<div style="text-align:center"><button class="linkish" data-act="recover">Recover administrator access</button></div>' +
+    (failedAttempt ? '<div style="text-align:center"><button class="linkish" data-act="recover">Recover administrator access</button></div>' : "") +
     '<p class="msg">' + esc(state.msg) + "</p>";
 }

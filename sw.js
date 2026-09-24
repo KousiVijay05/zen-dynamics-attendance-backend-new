@@ -1,8 +1,9 @@
 /* Bump CACHE whenever you change any app file, otherwise phones keep
-   serving the old version. Bumped to v13: replaced the visible-name
-   picker + PIN sign-in with a private username/password login and a
-   forced password change on first sign-in (see CHANGES.md). */
-const CACHE = "attendance-v13";
+   serving the old version. Bumped to v14: fixed the recovery flow
+   corrupting real accounts — stale-roster overwrite guard on
+   createAdminRecovery(), and "Recover administrator access" no longer
+   a standing link on a clean sign-in screen (see CHANGES.md). */
+const CACHE = "attendance-v14";
 const ASSETS = [
   "./", "./index.html", "./manifest.json",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/mark.png", "./icons/logo-lockup.png",

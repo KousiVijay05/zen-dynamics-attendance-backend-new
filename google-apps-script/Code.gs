@@ -67,6 +67,20 @@ function doPost(e) {
   if (req.token !== SECRET) return json({ ok: false, error: "Wrong token" });
   if (!rateLimitOk()) return json({ ok: false, error: "Too many requests, slow down." });
 
+  /* "all" is a pure read, and by far the most frequent request — every
+     device polls it every POLL_SECONDS plus on boot/focus, while writes
+     only happen on an actual clock-in/out or settings save. Serializing
+     reads behind the same exclusive lock as writes forces every device's
+     background poll to queue up behind whatever write happens to be in
+     flight (and behind every OTHER device's poll), which is pure added
+     latency for no correctness benefit — Sheets reads don't need mutual
+     exclusion the way read-modify-write sequences do. Skip the lock here;
+     keep it for every action that actually writes. */
+  if (req.action === "all") {
+    try { return json(handle(req)); }
+    catch (err) { return json({ ok: false, error: String(err) }); }
+  }
+
   var lock = LockService.getScriptLock();
   try { lock.waitLock(25000); }
   catch (err) { return json({ ok: false, error: "Busy, try again" }); }

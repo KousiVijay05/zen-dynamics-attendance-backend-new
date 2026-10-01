@@ -17,8 +17,8 @@ export function vChangePw() {
 
   return '<div class="bar"><div class="idn">' + brandMark() + '<div><div class="nm">' + esc(p.name) + '</div>' +
     '<div class="sub">Choose a new password</div></div></div></div>' +
-    '<p class="lede">This is your first sign-in, or your password was just reset. Pick a new password only you know — your administrator can still see it if you ever need it looked up.</p>' +
-    '<div class="field"><label for="cp_pass">New password</label><input id="cp_pass" type="password" autocomplete="new-password" /></div>' +
+    '<p class="lede">This is your first sign-in, or your password was just reset. Pick a new password only you know — it\'s stored encrypted, so nobody else (not even your administrator) can see it. If you forget it, your administrator can give you a new temporary one.</p>' +
+    '<div class="field"><label for="cp_pass">New password</label><input id="cp_pass" type="password" autocomplete="new-password" placeholder="At least 6 characters" /></div>' +
     '<div class="field"><label for="cp_confirm">Confirm password</label><input id="cp_confirm" type="password" autocomplete="new-password" /></div>' +
     '<div class="btnrow"><button class="btn go wide" data-act="changepw">Set password</button></div>' +
     '<p class="msg' + (state.msgOk ? " ok" : "") + '">' + esc(state.msg) + "</p>";

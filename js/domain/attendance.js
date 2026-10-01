@@ -13,6 +13,7 @@ import { state, geo, fenceState, emitChange } from "../core/store.js";
 import { sget, sset } from "../storage/storage-api.js";
 import { uid, dayKey, monKey, minsOfDay, parseHM } from "../utils/format.js";
 import { distanceNow } from "./geofence.js";
+import { loadLeaves } from "./leave.js";
 
 export function logKey(id, ts) { return "log:" + id + ":" + monKey(ts); }
 
@@ -192,6 +193,7 @@ export function loadAdminData() {
     jobs.push(loadLog(p.id, Date.now()));
     jobs.push(loadLog(p.id, monthTs));
     jobs.push(loadLog(p.id, Date.now() - 40 * 864e5));
+    jobs.push(loadLeaves(p.id));
   });
   return Promise.all(jobs).then(function () { state.adminLoaded = true; emitChange(); });
 }

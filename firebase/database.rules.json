@@ -2,10 +2,56 @@
   "rules": {
     ".read": false,
     ".write": false,
+    "uidmap": {
+      ".read": "(auth != null && root.child('uidmap/' + auth.uid).isString() && root.child('admins/' + root.child('uidmap/' + auth.uid).val()).val() === true)",
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "(auth != null && root.child('uidmap/' + auth.uid).isString() && root.child('admins/' + root.child('uidmap/' + auth.uid).val()).val() === true) || ((auth != null && !root.child('kv/org:public').exists()) && $uid === auth.uid && newData.val() === auth.uid)",
+        ".validate": "newData.isString() && newData.val().length <= 64"
+      }
+    },
+    "admins": {
+      ".read": "(auth != null && root.child('uidmap/' + auth.uid).isString() && root.child('admins/' + root.child('uidmap/' + auth.uid).val()).val() === true)",
+      "$id": {
+        ".read": "(auth != null && root.child('uidmap/' + auth.uid).exists()) && root.child('uidmap/' + auth.uid).val() === $id",
+        ".write": "(auth != null && root.child('uidmap/' + auth.uid).isString() && root.child('admins/' + root.child('uidmap/' + auth.uid).val()).val() === true) || ((auth != null && !root.child('kv/org:public').exists()) && $id === auth.uid)",
+        ".validate": "newData.val() === true"
+      }
+    },
+    "mustchange": {
+      ".read": "(auth != null && root.child('uidmap/' + auth.uid).isString() && root.child('admins/' + root.child('uidmap/' + auth.uid).val()).val() === true)",
+      "$id": {
+        ".read": "(auth != null && root.child('uidmap/' + auth.uid).exists()) && root.child('uidmap/' + auth.uid).val() === $id",
+        ".write": "(auth != null && root.child('uidmap/' + auth.uid).isString() && root.child('admins/' + root.child('uidmap/' + auth.uid).val()).val() === true) || ((auth != null && root.child('uidmap/' + auth.uid).exists()) && root.child('uidmap/' + auth.uid).val() === $id && !newData.exists())",
+        ".validate": "newData.val() === true"
+      }
+    },
+    "logins": {
+      "$u": {
+        ".read": true,
+        ".write": "(auth != null && root.child('uidmap/' + auth.uid).isString() && root.child('admins/' + root.child('uidmap/' + auth.uid).val()).val() === true) || (auth != null && !root.child('kv/org:public').exists())",
+        ".validate": "newData.isString() && newData.val().length <= 200"
+      }
+    },
     "kv": {
-      ".read": true,
+      ".read": "(auth != null && root.child('uidmap/' + auth.uid).isString() && root.child('admins/' + root.child('uidmap/' + auth.uid).val()).val() === true)",
+      "org:public": {
+        ".read": true,
+        ".write": "(auth != null && root.child('uidmap/' + auth.uid).isString() && root.child('admins/' + root.child('uidmap/' + auth.uid).val()).val() === true) || (auth != null && !root.child('kv/org:public').exists())",
+        ".validate": "newData.isString() && newData.val().length <= 5000"
+      },
+      "org:config": {
+        ".read": "(auth != null && root.child('uidmap/' + auth.uid).exists())",
+        ".write": "(auth != null && root.child('uidmap/' + auth.uid).isString() && root.child('admins/' + root.child('uidmap/' + auth.uid).val()).val() === true) || (auth != null && !root.child('kv/org:public').exists())",
+        ".validate": "newData.isString() && newData.val().length <= 200000"
+      },
+      "org:roster": {
+        ".write": "(auth != null && root.child('uidmap/' + auth.uid).isString() && root.child('admins/' + root.child('uidmap/' + auth.uid).val()).val() === true) || (auth != null && !root.child('kv/org:public').exists())",
+        ".validate": "newData.isString() && newData.val().length <= 200000"
+      },
       "$key": {
-        ".write": "$key.matches(/^(org:config|org:roster|log:[A-Za-z0-9_-]{1,64}:[0-9]{6})$/)",
+        ".read": "(auth != null && root.child('uidmap/' + auth.uid).exists()) && ($key === 'profile:' + root.child('uidmap/' + auth.uid).val() || $key === 'leave:' + root.child('uidmap/' + auth.uid).val() || $key === 'leavedec:' + root.child('uidmap/' + auth.uid).val() || $key.beginsWith('log:' + root.child('uidmap/' + auth.uid).val() + ':'))",
+        ".write": "$key.matches(/^((profile|leave|leavedec):[A-Za-z0-9_-]{1,64}|log:[A-Za-z0-9_-]{1,64}:[0-9]{6})$/) && ((auth != null && root.child('uidmap/' + auth.uid).isString() && root.child('admins/' + root.child('uidmap/' + auth.uid).val()).val() === true) || ((auth != null && !root.child('kv/org:public').exists()) && $key === 'profile:' + auth.uid) || ((auth != null && root.child('uidmap/' + auth.uid).exists()) && ($key === 'leave:' + root.child('uidmap/' + auth.uid).val() || $key.beginsWith('log:' + root.child('uidmap/' + auth.uid).val() + ':'))))",
         ".validate": "newData.isString() && newData.val().length <= 200000"
       }
     }

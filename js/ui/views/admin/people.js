@@ -48,8 +48,8 @@ availableShifts.forEach(function (s) {
 '</div></div>' +
         '<div class="field"><label for="e_name">Name</label><input id="e_name" type="text" value="' + esc(p.name) + '" /></div>' +
         '<div class="field"><label for="e_user">User ID</label><input id="e_user" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" value="' + esc(p.username || "") + '" /></div>' +
-        '<div class="field"><label for="e_pass">Password</label><input id="e_pass" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" value="' + esc(p.password || "") + '" />' +
-        '<span class="note">Visible so you can look it up for them. Change it here to reset it — they\'ll be asked to pick a new one next time they sign in.</span></div>' +
+        '<div class="field"><label for="e_pass">New temporary password</label><input id="e_pass" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Leave blank to keep their current one" />' +
+        '<span class="note">Passwords are stored encrypted — nobody, including administrators, can see them. If they\'ve forgotten theirs, type a new one here (at least 6 characters) and give it to them; they\'ll be asked to pick their own next time they sign in.</span></div>' +
         '<div class="field"><label for="e_sal">' + (state.cfg.pay.basis === "monthly" ? "Monthly salary" : "Hourly rate") + '</label>' +
         '<input id="e_sal" class="num" type="number" value="' + (p.salary || 0) + '" /></div>' +
         '<label class="check"><input type="checkbox" id="e_admin"' + (p.admin ? " checked" : "") + " /><div>Can administer</div></label>" +
@@ -75,7 +75,7 @@ availableShifts.forEach(function (s) {
   html += "</div><h2>Add someone</h2>" +
     '<div class="field"><label for="n_name">Name</label><input id="n_name" type="text" placeholder="Full name" /></div>' +
     '<div class="field"><label for="n_user">User ID</label><input id="n_user" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="e.g. jsmith" /></div>' +
-    '<div class="field"><label for="n_pass">Temporary password</label><input id="n_pass" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="At least 4 characters" />' +
+    '<div class="field"><label for="n_pass">Temporary password</label><input id="n_pass" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="At least 6 characters" />' +
     '<span class="note">Give this to them along with their user ID — they\'ll be asked to pick their own password the first time they sign in.</span></div>' +
     '<div class="field"><label for="n_sal">' + (state.cfg.pay.basis === "monthly" ? "Monthly salary" : "Hourly rate") + '</label>' +
     '<input id="n_sal" class="num" type="number" placeholder="0" /></div>' +

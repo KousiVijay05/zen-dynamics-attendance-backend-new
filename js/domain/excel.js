@@ -8,6 +8,7 @@
 import { state } from "../core/store.js";
 import { dayKey, tClock, monthLabel, DAYS } from "../utils/format.js";
 import { payrollFor } from "./payroll.js";
+import { allLeaves } from "./leave.js";
 
 function buildWorkbook() {
   var P = state.cfg.pay, ym = state.month, wb = XLSX.utils.book_new();
@@ -36,10 +37,7 @@ function buildWorkbook() {
       });
   });
 
-  /* Password deliberately left out, same reasoning Code.gs already applies to the
-     live Sheet's Staff tab for PINs: an exported file gets shared/stored more
-     loosely than the admin-only People tab, where the current password is still
-     visible on request. */
+  /* No password column: passwords live only in Firebase Authentication (hashed). */
   var staff = [["Name", "User ID", P.basis === "monthly" ? "Monthly salary" : "Hourly rate", "Administrator", "Active"]];
   state.roster.forEach(function (p) {
     staff.push([p.name, p.username || "", p.salary || 0, p.admin ? "Yes" : "", p.active === false ? "" : "Yes"]);
@@ -48,7 +46,7 @@ function buildWorkbook() {
   var names = {};
   state.roster.forEach(function (p) { names[p.id] = p.name; });
   var leave = [["Staff", "From", "To", "Days", "Status", "Reason", "Requested"]];
-  (state.cfg.leaves || []).forEach(function (l) {
+  allLeaves().forEach(function (l) {
     leave.push([names[l.staffId] || l.staffId, l.from, l.to, l.days, l.status, l.reason || "",
       new Date(l.requestedAt).toLocaleString()]);
   });

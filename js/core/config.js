@@ -31,7 +31,6 @@ export function withConfigDefaults(cfg) {
   if (cfg.graceMin === undefined) cfg.graceMin = 0;
   if (cfg.demo === undefined) cfg.demo = false;
   if (!Array.isArray(cfg.shifts)) cfg.shifts = [];
-  if (!Array.isArray(cfg.leaves)) cfg.leaves = [];
   if (cfg.pay.leavePerYear === undefined) cfg.pay.leavePerYear = 15;
   return cfg;
 }

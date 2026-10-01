@@ -1,48 +1,69 @@
 /* ---------------------------------------------------------------
-   Authentication: username/password sign-in, forced password change
-   on first login, and the two recovery flows (first-run workplace
-   setup, "no administrator left").
+   Authentication: sign-in through Firebase Authentication, forced
+   password change, sign-out, and first-run workplace setup.
 
-   Replaces the original tap-your-name-then-PIN flow: the sign-in
-   screen no longer lists staff names at all (anyone with the link
-   could see the whole roster before), and each person now has their
-   own admin-assigned username + password instead of a shared-visible
-   4-digit PIN.
+   Passwords never touch the database: Firebase Auth stores them
+   hashed, so nobody — including admins — can read one. Admins can SET
+   a new temporary password for someone (Admin -> People), which forces
+   that person to choose their own at next sign-in (see roster.js).
 
-   SECURITY NOTE, same honesty as the rest of this app: passwords are
-   stored in plaintext in org:roster, same as PINs always were — see
-   README's Security section. This is a deliberate choice (the admin
-   is meant to be able to see/reset anyone's password, e.g. if they
-   forget it), not an oversight. It does not add real per-user backend
-   authentication; SECRET is still the only actual gate on the data
-   layer, and it still ships in this deployed page's client JS.
+   There is no in-app "recover administrator" flow: on the free plan
+   nothing could check "no admin is left" safely. If every admin is ever
+   locked out, the project owner fixes it in the Firebase console
+   (README → Security).
 
    Design note: these functions read already-parsed arguments, never
-   the DOM — js/events/handlers.js is the only place that reads
-   input values, so this file stays testable and UI-agnostic. On a
-   validation problem they throw a plain Error whose .message is the
-   text to show the user; js/ui/notify.js is what actually renders it.
+   the DOM — js/events/handlers.js is the only place that reads input
+   values. Validation problems throw a plain Error whose .message is
+   shown to the user.
 ----------------------------------------------------------------*/
 
 import { state, emitChange } from "../core/store.js";
-import { sset, sget } from "../storage/storage-api.js";
-import { uid, dayKey } from "../utils/format.js";
-import { defaultPay } from "../core/config.js";
+import { sget } from "../storage/storage-api.js";
+import { defaultPay, withConfigDefaults } from "../core/config.js";
 import { startWatch, startTick } from "./geofence.js";
 import { loadLog } from "./attendance.js";
-import { refreshRoster } from "./roster.js";
+import { loadLeaves } from "./leave.js";
 
-var PASSWORD_MIN = 4;
+export var PASSWORD_MIN = 6;   // Firebase Authentication's minimum
+var USERNAME_RE = /^[a-z0-9._-]{2,32}$/;
 
-function saveCfg() { return sset("org:config", state.cfg, true); }
-function saveRoster() { return sset("org:roster", state.roster, true); }
-
+function A() { return window.storageAuth; }
 function normUsername(u) { return (u || "").trim().toLowerCase(); }
+export function checkUsername(u) {
+  if (!USERNAME_RE.test(u)) throw new Error("User ID must be 2-32 characters: lowercase letters, numbers, dots, dashes or underscores.");
+}
+var today = function () { return new Date().toISOString().slice(0, 10); };
 
-function findByUsername(username) {
-  var u = normUsername(username);
-  if (!u) return null;
-  return state.roster.filter(function (x) { return normUsername(x.username) === u; })[0] || null;
+/** The pre-sign-in subset of the config the sign-in screen needs. Same as org.js savePublic(). */
+export function publicOf(c) { return { org: c.org, site: c.site, lockOutside: c.lockOutside, adminAnywhere: c.adminAnywhere, demo: c.demo }; }
+
+/**
+ * After a successful sign-in (or a remembered session at boot): load
+ * this person's data and land them on the right screen. Staff only ever
+ * load their own profile; admins load the whole roster.
+ */
+export function enterAs(who) {
+  if (!who || !who.staffId) return signOut("That account is no longer active. Ask your administrator.");
+  return Promise.all([
+    sget("org:config", true),
+    sget("profile:" + who.staffId, true),
+    who.admin ? sget("org:roster", true) : Promise.resolve(null)
+  ]).then(function (r) {
+    if (r[0]) state.cfg = withConfigDefaults(r[0]);
+    var me = r[1];
+    if (!me || me.active === false) {
+      return signOut("That account is no longer active. Ask your administrator.");
+    }
+    me.admin = who.admin;                 // /admins is the authority, not the stored flag
+    state.roster = Array.isArray(r[2]) ? r[2] : [me];
+    if (who.mustChange) {
+      state.me = null; state.changePwFor = me.id; state.view = "changepw"; state.msg = "";
+      emitChange();
+      return;
+    }
+    return signIn(me);
+  });
 }
 
 /** First-run: create the workplace, its site geofence, and the first administrator. */
@@ -54,198 +75,97 @@ export function createWorkplace(fields) {
   var la = fields.lat, ln = fields.lng, rad = fields.radius;
 
   if (!org || !nm) throw new Error("Enter a workplace name and your name.");
-  if (!username) throw new Error("Choose a user ID.");
+  checkUsername(username);
   if (password.length < PASSWORD_MIN) throw new Error("The password must be at least " + PASSWORD_MIN + " characters.");
   if (!isFinite(la) || !isFinite(ln) || Math.abs(la) > 90 || Math.abs(ln) > 180) {
     throw new Error("Set the site coordinates first.");
   }
 
-  /* This screen appears whenever state.cfg is falsy — which is also what
-     happens after a failed or stale fetch of org:config (see
-     js/storage/storage-gsheets.js's local-snapshot fallback), not only
-     when a workplace genuinely doesn't exist yet. Since this flow
-     unconditionally overwrites org:config and org:roster, that ambiguity
-     is dangerous: anyone who lands here on a bad connection would wipe
-     out a real, already-set-up workplace with no warning.
-
-     sget() alone isn't enough here — it reads from an in-memory cache
-     populated once at boot, so if THAT boot-time fetch was the one that
-     failed, re-reading it just returns the same stale/empty answer.
-     window.storageSync() (when the Google Sheets backend is active)
-     forces an actual fresh network pull first, so this check reflects
-     what's really on the server right now, not a cached guess. */
-  return (window.storageSync ? window.storageSync() : Promise.resolve()).then(function () {
-    return sget("org:config", true);
-  }).then(function (existing) {
-    if (existing) {
-      throw new Error("A workplace already exists on this link — reload the page and sign in instead of setting up a new one. If you manage this app and believe that's wrong, check with whoever administers it before proceeding.");
-    }
-
-    state.cfg = {
-      org: org,
-      site: { lat: la, lng: ln, radius: isFinite(rad) && rad >= 10 ? rad : 100 },
-      lockOutside: true, graceMin: 0, adminAnywhere: true, demo: false, pay: defaultPay(), shifts: [], leaves: []
-    };
-    /* The first admin sets their own password right now, so unlike staff
-       added later there's nothing to force-change on next login. */
-    state.roster = [{
-      id: uid(), name: nm, username: username, password: password, mustChangePassword: false,
-      admin: true, active: true, salary: 0, joined: dayKey(Date.now())
-    }];
-    state.msg = "";
-
-    return Promise.all([saveCfg(), saveRoster()]).then(function () { return signIn(state.roster[0]); });
-  });
-}
-
-/** "No administrator found" recovery screen: adds a fresh admin without touching existing records. */
-export function createAdminRecovery(fields) {
-  var rn = (fields.name || "").trim();
-  var ru = normUsername(fields.username);
-  var rp = (fields.password || "").trim();
-
-  if (!rn) throw new Error("Enter a name.");
-  if (!ru) throw new Error("Choose a user ID.");
-  if (rp.length < PASSWORD_MIN) throw new Error("The password must be at least " + PASSWORD_MIN + " characters.");
-
-  /* Same reasoning as createWorkplace()'s guard: this screen can appear (or
-     get lingered on) with a stale in-memory state.roster — a fetch failure
-     at boot, a snapshot from before other devices' changes synced in, or
-     simply an open tab that's been sitting on this screen for a while.
-     Pushing onto and saving THAT roster would silently discard whatever
-     really exists server-side. Force a fresh pull and rebuild the push on
-     top of it, not on top of whatever's in memory. This is also where the
-     real fix for a real incident landed: a stale roster here once
-     overwrote real staff's usernames/passwords with an outdated copy. */
-  return (window.storageSync ? window.storageSync() : Promise.resolve()).then(function () {
-    return sget("org:roster", true);
-  }).then(function (freshRoster) {
-    var roster = Array.isArray(freshRoster) ? freshRoster : (state.roster || []);
-    if (roster.some(function (x) { return normUsername(x.username) === ru; })) {
-      throw new Error("Someone already uses that user ID — pick another.");
-    }
-
-    var fresh = {
-      id: uid(), name: rn, username: ru, password: rp, mustChangePassword: false,
-      admin: true, active: true, salary: 0, joined: dayKey(Date.now())
-    };
-    roster.push(fresh);
-    state.roster = roster;
-
-    return saveRoster()
-      .then(function () { return sget("org:roster", true); })
-      .then(function (back) {
-        if (!back || !back.length) {
-          state.msg = "The staff list didn't save. Try once more."; state.msgOk = false;
-          emitChange();
-          return;
-        }
-        state.roster = back;
-        return signIn(state.roster.filter(function (x) { return x.id === fresh.id; })[0] || fresh);
+  var cfg = {
+    org: org,
+    site: { lat: la, lng: ln, radius: isFinite(rad) && rad >= 10 ? rad : 100 },
+    lockOutside: true, graceMin: 0, adminAnywhere: true, demo: false, pay: defaultPay(), shifts: []
+  };
+  return A().createOwnAccount(username, password).then(function (acc) {
+    var id = acc.uid;    // the first admin's staff id is their account uid (the rules check this)
+    var me = { id: id, name: nm, username: username, authUid: acc.uid, authEmail: acc.email, admin: true, active: true,
+               salary: 0, shifts: [], workDays: ["Mon", "Tue", "Wed", "Thu", "Fri"], tasks: [], joined: today() };
+    var paths = {};
+    paths["kv/org:public"] = JSON.stringify(publicOf(cfg));
+    paths["kv/org:config"] = JSON.stringify(cfg);
+    paths["kv/org:roster"] = JSON.stringify([me]);
+    paths["kv/profile:" + id] = JSON.stringify(me);
+    paths["uidmap/" + acc.uid] = id;
+    paths["admins/" + id] = true;
+    if (!acc.isDefault) paths["logins/" + A().loginKey(username)] = acc.email;
+    /* One all-or-nothing write. The database rules allow it ONLY while no
+       workplace exists, so a device that reached this screen through a
+       failed or stale load can't overwrite a real workplace. */
+    return A().update(paths).catch(function (err) {
+      return A().discardOwnAccount().then(function () {
+        throw /^Not allowed/.test(err.message)
+          ? new Error("A workplace already exists on this link — reload the page and sign in instead.")
+          : err;
       });
-  });
+    }).then(function () { return A().refresh(); });
+  }).then(enterAs);
 }
-
-/** Deletes the workplace, its roster and every record. Caller is responsible for confirming with the user first. */
-export function resetOrg() {
-  return Promise.all([sset("org:config", null, true), sset("org:roster", null, true), sset("device:last", null, false)])
-    .then(function () {
-      state.cfg = null; state.roster = []; state.me = null; state.logs = {}; state.msg = "";
-      state.view = "setup";
-      emitChange();
-    });
-}
-
-export function goToRecover() { state.view = "recover"; state.msg = ""; emitChange(); }
 
 /** Reveals the login form despite a geofence lock (only an admin's credentials will actually get them in). */
 export function showAdminOnly(on) { state.adminOnly = !!on; state.msg = ""; emitChange(); }
 
-/**
- * Checks a username/password against the roster. On success: routes to
- * the forced password-change screen if this account still has a
- * temporary password, otherwise signs straight in. On failure, one
- * generic message regardless of whether the username or the password
- * was wrong — doesn't confirm which usernames exist.
- */
+/** Username + password sign-in. One generic message for any wrong combination. */
 export function attemptLogin(fields) {
-  var username = fields.username, password = (fields.password || "").trim();
-
-  /* Check against the latest roster, not the copy this page loaded at
-     boot — a shared sign-in device left open all day would otherwise
-     reject someone the admin added (or whose password was reset) since. */
-  return refreshRoster().then(function () {
-    var p = findByUsername(username);
-    var ok = p && p.active !== false && p.password === password;
-
-    if (!ok) {
-      state.msg = "User ID or password is incorrect."; state.msgOk = false;
-      emitChange();
-      return;
+  var username = normUsername(fields.username), password = fields.password || "";
+  return A().signIn(username, password).then(function (who) {
+    /* The geofence lock only ever let admins bypass it (adminAnywhere). */
+    if (state.adminOnly && !who.admin) {
+      return signOut("Only administrators can sign in while outside the site.");
     }
-
-    /* The geofence lock only ever let admins bypass it (adminAnywhere) —
-       a non-admin whose credentials happen to be correct while the app is
-       showing the locked screen still isn't allowed through here. */
-    if (state.adminOnly && !p.admin) {
-      state.msg = "Only administrators can sign in while outside the site.";
-      state.msgOk = false;
-      emitChange();
-      return;
-    }
-
-    if (p.mustChangePassword) {
-      state.changePwFor = p.id; state.view = "changepw"; state.msg = "";
-      emitChange();
-      return;
-    }
-
-    return signIn(p);
+    return enterAs(who);
+  }, function (err) {
+    state.msg = err.message; state.msgOk = false;
+    emitChange();
   });
 }
 
-/**
- * Forced (or admin-reset-triggered) password change. `fields` =
- * { password, confirm }. Applies to state.changePwFor, then signs in.
- */
+/** Forced (first sign-in / admin reset) password change. `fields` = { password, confirm }. */
 export function changePassword(fields) {
   var pw = (fields.password || "").trim();
   var confirm = (fields.confirm || "").trim();
-
   if (pw.length < PASSWORD_MIN) throw new Error("The password must be at least " + PASSWORD_MIN + " characters.");
   if (pw !== confirm) throw new Error("Passwords don't match.");
 
-  /* Saves the whole roster, so apply the change to the latest copy —
-     not this page's boot-time one, which could clobber others' edits. */
-  return refreshRoster().then(function () {
-    var p = state.roster.filter(function (x) { return x.id === state.changePwFor; })[0];
-    if (!p) { state.view = "signin"; state.msg = ""; emitChange(); return; }
-
-    p.password = pw;
-    p.mustChangePassword = false;
+  return A().changeOwnPassword(pw).then(function () {
     state.changePwFor = null;
-
-    return saveRoster().then(function () { return signIn(p); });
+    return enterAs(A().current());
   });
 }
 
 export function backToSignin() {
+  if (state.view === "changepw") return signOut("");
   state.view = "signin"; state.msg = ""; state.adminOnly = false;
   emitChange();
+  return Promise.resolve();
 }
 
-/** Signs a person in: sets state.me, remembers the device, and warms up their logs. */
+/** Signs a person in: sets state.me and warms up their logs and leave. */
 export function signIn(p) {
   state.me = p; state.view = "staff"; state.msg = ""; state.adminOnly = false;
-  sset("device:last", { id: p.id }, false);
-  return Promise.all([loadLog(p.id, Date.now()), loadLog(p.id, Date.now() - 40 * 864e5)]).then(function () {
+  return Promise.all([loadLog(p.id, Date.now()), loadLog(p.id, Date.now() - 40 * 864e5), loadLeaves(p.id)]).then(function () {
     emitChange();
     startWatch(); startTick();
   });
 }
 
-export function signOut() {
-  state.me = null; state.view = "signin"; state.msg = "";
-  sset("device:last", null, false);
-  emitChange();
+/** Ends the session on this device. `msg` (optional) is shown on the sign-in screen. */
+export function signOut(msg) {
+  return A().signOut().then(function () {
+    state.me = null; state.changePwFor = null; state.logs = {}; state.leaveData = {};
+    state.adminLoaded = false; state.editId = null;
+    state.roster = [];
+    state.view = "signin"; state.msg = msg || ""; state.msgOk = false;
+    emitChange();
+    startWatch(); startTick();
+  });
 }

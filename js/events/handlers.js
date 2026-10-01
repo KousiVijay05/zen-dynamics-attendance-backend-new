@@ -20,7 +20,7 @@ import { $, wConfirm } from "../ui/dom.js";
 import { say, sayAndPaint } from "../ui/notify.js";
 import { startWatch, retryLocation } from "../domain/geofence.js";
 import {
-  createWorkplace, createAdminRecovery, resetOrg, goToRecover, showAdminOnly,
+  createWorkplace, showAdminOnly,
   attemptLogin, changePassword, backToSignin, signOut
 } from "../domain/auth.js";
 import { clockIn, clockOut, loadAdminData, openEntryFor } from "../domain/attendance.js";
@@ -65,23 +65,6 @@ export function initEvents() {
           radius: parseInt($("f_rad").value, 10)
         }).catch(function (err) { say(err.message); });
       } catch (err) { say(err.message); }
-      return;
-    }
-
-    if (act === "recover") { goToRecover(); return; }
-
-    if (act === "makeadmin") {
-      try {
-        createAdminRecovery({
-          name: $("r_nm").value, username: $("r_user").value, password: $("r_pass").value
-        }).catch(function (err) { say(err.message); });
-      } catch (err) { say(err.message); }
-      return;
-    }
-
-    if (act === "resetorg") {
-      if (!wConfirm("Delete this workplace, its staff list and all records?")) return;
-      resetOrg();
       return;
     }
 
@@ -218,7 +201,7 @@ tasks: selectedTasks
 
     if (act === "deleteshift") {
       if (!wConfirm("Delete this shift? Anyone assigned to it will need a new one picked.")) return;
-      deleteShift(id).then(function (msg) { sayAndPaint(msg, true); });
+      deleteShift(id).then(function (msg) { sayAndPaint(msg, true); }).catch(function (err) { say(err.message); });
       return;
     }
     if (act === "addperson") {
@@ -230,7 +213,7 @@ tasks: selectedTasks
       } catch (err) { say(err.message); }
       return;
     }
-    if (act === "toggleactive") { toggleActive(id); return; }
+    if (act === "toggleactive") { toggleActive(id).catch(function (err) { say(err.message); }); return; }
 
     if (act === "offday") { toggleWeeklyOff(+v); return; }
     if (act === "savepay") {

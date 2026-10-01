@@ -68,39 +68,30 @@ storage `<script>` line in `index.html` to `js/storage/storage-local.js`
 (per-device localStorage) — first run then takes you through workplace
 setup.
 
-## Shared storage: Firebase (current)
+## Backend: Firebase (current)
 
-Data lives in the Firebase Realtime Database of project
-`zen-dynamics-attendance-a2f73` (region `asia-southeast1`), at `/kv`.
+Project `zen-dynamics-attendance-a2f73` (region `asia-southeast1`), on the
+free **Spark** plan.
 
-- Config: top of `js/storage/storage-firebase.js` (public by design).
-- Security rules: `firebase/database.rules.json` — deploy changes from the
-  Firebase console (Realtime Database → Rules) or the Firebase CLI.
-- Data console: Firebase console → Realtime Database → Data.
-- Copying data from the old Sheet: `node firebase/migrate-from-sheets.js
-  --dry-run` (read-only), then without the flag; `--catch-up` merges in
-  punches made from a device still on the old version after a switch.
+- **Data**: Realtime Database, at `/kv` (one JSON string per key), plus
+  the membership records `/uidmap`, `/admins`, `/mustchange`, `/logins`
+  (see the header of `js/storage/storage-firebase.js`).
+- **Sign-in**: Firebase Authentication, email/password. A person's account
+  email is `<user ID>@zen-dynamics-attendance-a2f73.firebaseapp.com` (or
+  with a `+suffix` after a password reset). Nothing is ever emailed to it.
+- **Rules**: `firebase/database.rules.json`. Deploy with
+  `npx firebase-tools deploy --only database` from this folder.
+- Web config: top of `js/storage/storage-firebase.js` (public by design —
+  the rules and sign-in are what protect the data).
+- History: `firebase/migrate-from-sheets.js` moved the data off Google
+  Sheets; `firebase/migrate-security.js` moved accounts to Firebase
+  Authentication (v17). Both are one-off.
 
-## Previous backend: Google Sheets (fallback)
+## Previous backend: Google Sheets (retired)
 
-Still works and its Sheet is kept intact. To switch back, point the
-storage `<script>` line in `index.html` at `js/storage/storage-gsheets.js`
-(a classic `<script>`, not `type="module"`). Original setup, for
-reference:
-
-1. Create a Google Sheet, paste `google-apps-script/Code.gs` into its
-   Apps Script editor, set a strong `SECRET`, run `setup()` once, deploy as
-   a web app (**Execute as: Me**, **Who has access: Anyone**).
-2. Put that deployment's URL and your `SECRET` into
-   `js/storage/storage-gsheets.js`.
-3. In `index.html`, change:
-   ```html
-   <script src="js/storage/storage-local.js"></script>
-   ```
-   to:
-   ```html
-   <script src="js/storage/storage-gsheets.js"></script>
-   ```
+The Sheet is kept as a read-only historical copy (passwords removed). The
+Sheets/local adapters in `js/storage/` predate sign-in through Firebase
+Authentication and can't be swapped back in without reworking sign-in.
 
 ## Deploying the frontend
 
@@ -115,7 +106,7 @@ always show "Location unavailable"). A few options:
   server that can serve static files over https (nginx, Apache, etc.).
 
 After the first deploy, if you make changes later, bump the `CACHE`
-version string at the top of `sw.js` (already at `attendance-v4`) so
+version string at the top of `sw.js` (currently `attendance-v17`) so
 installed phones pick up the update instead of serving a stale cached copy.
 
 ## First-time configuration walkthrough
@@ -141,15 +132,12 @@ installed phones pick up the update instead of serving a stale cached copy.
    admins can sign in from anywhere, and demo mode (see Testing GPS below).
 8. **Admin → People → Add someone** for each staff member: name, a user ID,
    a temporary password, and salary/rate/admin. They're asked to pick
-   their own password the first time they sign in — the temporary one
-   only works once. You (the admin) can always see or reset anyone's
-   current password from their edit screen if they lose it.
+   their own password the first time they sign in. Nobody — admins
+   included — can see anyone's password; if someone forgets theirs, give
+   them a new temporary one from their edit screen.
 
-If everyone with admin rights is ever deactivated or every admin's
-password is lost beyond recovery, the sign-in screen has a **"Recover
-administrator access"** link (shown automatically whenever no active
-administrator exists) that lets you create a new admin without losing
-any records.
+If every administrator is ever locked out, see README → Security for the
+two-minute fix in the Firebase console.
 
 ## Testing GPS / geofencing
 
@@ -203,76 +191,40 @@ Records.
 
 ## Security
 
-Read this before you rely on this app for anything sensitive. The
-short version: **the sign-in screen is a UI convenience, not a real
-access control.** The only actual gate on who can read or write your
-data is `SECRET` — and `SECRET` ships inside
-`js/storage/storage-gsheets.js`, which is downloaded to every visitor's
-browser. Anyone who views page source has it, and with it, full
-read/write access to the whole spreadsheet through the Apps Script
-endpoint directly — no username or password needed. This is true of
-any purely static front end talking to a shared-secret backend; it is
-not something obfuscating or minifying the JS fixes.
+Since v17 the sign-in screen is a real lock:
 
-**On Firebase (current backend) the same applies:** the web config in
-`js/storage/storage-firebase.js` is public by design, and
-`firebase/database.rules.json` lets any visitor read and write the
-allowed `/kv` keys — the same exposure `SECRET` had. The rules only
-enforce key shape and size, like `Code.gs` did.
+- **Passwords** are held by Firebase Authentication (hashed), never in the
+  database or the Excel export. Nobody, admins included, can read one.
+  Admins can only set a new temporary password, which the person must
+  replace at their next sign-in.
+- **Database rules** (`firebase/database.rules.json`) are enforced by
+  Google's servers, not by the app, so they hold even against someone
+  calling the database directly:
+  - signed out, or signed in with an account that isn't an active staff
+    member: only the workplace name and site (`org:public`);
+  - staff: their own profile, attendance, and leave requests (they can't
+    change their profile, approve leave, or make themselves admin);
+    workplace settings read-only;
+  - admins: everything.
+- **First-time setup** is only possible while no workplace exists.
+- **Phones** cache only the signed-in person's data; signing out clears it.
 
-Also worth knowing: usernames and passwords are stored in plaintext in
-`org:roster`, deliberately — an admin can see and reset anyone's
-password from Admin → People, which only works if it isn't hashed. If
-that trade-off doesn't suit your workplace, that's a design decision
-to revisit explicitly, not a bug.
+What's still worth knowing:
 
-What this rebuild does to reduce the actual risk, without replacing the
-architecture (which you asked me not to do):
-
-- **Server-side input validation in `Code.gs`**: every write is checked
-  against an allowlist of key shapes the app actually uses, value size is
-  capped at 200,000 characters, batches are capped at 200 items, and a
-  simple per-minute counter throttles a single runaway/abusive caller.
-  This stops accidental or malicious garbage from reaching your sheet or
-  blowing through your daily Apps Script quota — it does not stop someone
-  who has `SECRET` from reading or editing legitimate-looking data.
-- **Password not included in the readable `Staff` sheet or the Excel
-  export** (this was already true of PINs in the original — kept, and
-  applied the same way to passwords).
-
-What I deliberately did **not** implement, and why:
-
-- **Password hashing.** Deliberately not done: the admin being able to
-  see and reset anyone's current password from Admin → People (this
-  app's actual account-recovery mechanism, since there's no email to
-  send a reset link to) requires storing it in a form the admin can
-  read back, which a hash by definition prevents. Hashing would also
-  need a migration story for accounts that already have a plaintext
-  password saved. If you want this anyway — accepting that "forgot my
-  password" then has no self-serve recovery path — it's a contained
-  change, happy to add it as a follow-up with an explicit migration
-  step.
-- **Real per-user authentication.** The only way to actually close the
-  "anyone with SECRET has full access" gap is to put real auth in front of
-  the Apps Script endpoint — e.g., restricting the deployment to a Google
-  Workspace domain and requiring a Google Identity token, or moving the
-  backend off Apps Script entirely to something that supports per-user
-  sessions. Both are meaningfully bigger changes than "harden the existing
-  architecture," so I didn't make them — flagging it here so it's your
-  informed decision, not a silent gap.
-
-Practical mitigations, in order of effort:
-
-1. **Treat `SECRET` as a leak-and-rotate credential.** If you ever suspect
-   it's been shared (e.g., someone screenshots the page source), change it
-   in both `Code.gs` and `storage-gsheets.js` and redeploy.
-2. **Don't publish your deployed app's source publicly** (private repo,
-   unlisted hosting) if the extra obscurity matters to you — it's not real
-   security, but it raises the bar against casual discovery.
-3. **Keep the underlying Google Sheet private** to whoever manages
-   payroll. Staff and other administrators only ever need the app URL, not
-   sheet access.
-4. **If you outgrow this model** (a large team, sensitive pay data,
-   compliance requirements), that's the point to invest in real per-user
-   backend auth rather than continuing to harden a shared-secret static
-   front end — happy to help scope that as a separate project.
+- Staff write their own attendance records, so a technically skilled
+  staff member could edit their own punches directly. The geofence check
+  runs on the phone. Admins see every punch in Records.
+- Admins are fully trusted: the "can't remove the last admin" and "can't
+  deactivate yourself" checks are in the app, not the rules.
+- **Every admin locked out?** Firebase console → Realtime Database → Data:
+  find the person's staff id in `kv/org:roster`, then add
+  `admins/<staff id>: true` and `uidmap/<their authUid>: <staff id>`.
+  For a forgotten password, Authentication → Users → their account →
+  Reset password isn't usable (the email is fake); instead add a new
+  admin the same way with a freshly created account.
+- The old Google Apps Script endpoint and its `SECRET` still exist. After
+  migration the Sheet holds no passwords, but it does hold old attendance
+  history; to close it entirely, archive the Apps Script deployment (Apps
+  Script → Deploy → Manage deployments → Archive).
+- The `kv-backup-*.json` file the migration writes contains the old
+  plaintext passwords. Keep it private, and delete it once you're happy.

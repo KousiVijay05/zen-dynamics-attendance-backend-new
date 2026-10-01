@@ -1,10 +1,10 @@
 /* ---------------------------------------------------------------
-   App bootstrap. Ported from the "boot" section at the bottom of
-   the original app.js, wired to the modularized pieces:
+   App bootstrap:
    - subscribes render() to state changes
    - registers the click/change delegation
-   - runs the original boot sequence: load config/roster/device,
-     decide which screen to land on, prime location if needed
+   - boot: read the public workplace record (name + site, for the
+     sign-in screen), then resume a remembered sign-in or show the
+     sign-in screen
 
    Loaded from index.html as <script type="module" src="js/app.js">.
    A top-level try/catch keeps a genuinely unexpected boot failure
@@ -19,8 +19,8 @@ import { sget } from "./storage/storage-api.js";
 import { render } from "./ui/render.js";
 import { initEvents } from "./events/handlers.js";
 import { startWatch, startTick } from "./domain/geofence.js";
-import { signIn, signOut } from "./domain/auth.js";
-import { loadLog } from "./domain/attendance.js";
+import { enterAs, signOut } from "./domain/auth.js";
+import { loadLeaves } from "./domain/leave.js";
 import { userIsTyping } from "./ui/dom.js";
 
 onChange(render);
@@ -31,33 +31,24 @@ function boot() {
   /* No storage backend loaded at all (e.g. the Firebase SDK couldn't be
      fetched on a first open with no signal). storage-api.js would quietly
      fall back to an empty in-memory store, which reads as "no workplace
-     exists" and lands on the setup screen — the exact path behind a past
-     overwrite incident. Stop with a clear error instead. */
-  if (!window.storage) {
+     exists" and lands on the setup screen. Stop with a clear error instead. */
+  if (!window.storage || !window.storageAuth) {
     return Promise.reject(new Error("Couldn't reach the attendance server. Check your internet connection and reload."));
   }
-  return Promise.all([sget("org:config", true), sget("org:roster", true), sget("device:last", false)])
-    .then(function (r) {
-      state.cfg = withConfigDefaults(r[0]);
-      state.roster = r[1] || [];
-
-      if (!state.cfg) {
-        state.view = "setup"; emitChange(); startWatch();
-        return;
-      }
-
-      var hasAdmin = state.roster.some(function (p) { return p.admin && p.active !== false; });
-      if (!hasAdmin) {
-        state.view = "recover"; emitChange(); startWatch();
-        return;
-      }
-
-      var last = r[2] && r[2].id ? state.roster.filter(function (p) { return p.id === r[2].id && p.active !== false; })[0] : null;
-      if (last) return signIn(last);
-
+  return sget("org:public", true).then(function (pub) {
+    if (!pub) {
+      /* Safe even if this is a stale/failed read: the server refuses to
+         create a workplace when one already exists. */
+      state.view = "setup"; emitChange(); startWatch();
+      return;
+    }
+    state.cfg = withConfigDefaults(pub);
+    return window.storageAuth.ready().then(function () {
+      var who = window.storageAuth.current();
+      if (who) return enterAs(who);
       state.view = "signin"; emitChange(); startWatch(); startTick();
-      return Promise.all(state.roster.map(function (p) { return loadLog(p.id, Date.now()); })).then(emitChange);
     });
+  });
 }
 
 boot().catch(function (err) {
@@ -67,20 +58,24 @@ boot().catch(function (err) {
 });
 
 /* ---------- live updates from other devices ----------
-   storage-firebase.js fires this when another device's save lands. Pull the
-   changed keys into app state so open screens (admin On site / Records /
-   People, a staff dashboard) show it within a second instead of after a
-   Refresh tap or reload. Never re-render under someone mid-typing — that
-   would wipe the field (see userIsTyping in ui/dom.js); catch up on blur. */
+   storage-firebase.js fires this when another device's save lands on a key
+   this device is following. Pull it into app state so open screens (admin
+   On site / Records / People / Leave, a staff dashboard) show it within a
+   second. Never re-render under someone mid-typing — that would wipe the
+   field (see userIsTyping in ui/dom.js); catch up on blur. */
 var redrawPending = false;
 
 window.addEventListener("storage-remote-change", function (ev) {
   if (!state.cfg) return;   // still on setup/boot — nothing loaded to refresh
   var keys = ev.detail.keys;
   var jobs = keys.map(function (k) {
+    var leave = /^leave(?:dec)?:(.+)$/.exec(k);
+    if (leave) return loadLeaves(leave[1]);
     return sget(k, true).then(function (v) {
       if (k === "org:config") { if (v) state.cfg = withConfigDefaults(v); }
+      else if (k === "org:public") { if (v && !state.me) state.cfg = withConfigDefaults(Object.assign({}, state.cfg, v)); }
       else if (k === "org:roster") { if (Array.isArray(v)) applyRoster(v); }
+      else if (state.me && k === "profile:" + state.me.id) applyProfile(v);
       else if (k in state.logs) state.logs[k] = v || [];
     });
   });
@@ -91,8 +86,16 @@ function applyRoster(roster) {
   state.roster = roster;
   if (!state.me) return;
   var me = roster.filter(function (p) { return p.id === state.me.id; })[0];
-  if (!me || me.active === false) { signOut(); return; }   // deactivated or removed elsewhere
+  if (me) applyProfile(me);
+}
+
+/* This person's own record changed (shifts, tasks, deactivated...). The
+   admin flag comes from the signed sign-in claim, never the record. */
+function applyProfile(me) {
+  if (!me || me.active === false) { signOut("That account is no longer active. Ask your administrator."); return; }
+  me.admin = state.me.admin;
   state.me = me;
+  state.roster = state.roster.map(function (p) { return p.id === me.id ? me : p; });
 }
 
 function redraw() {

@@ -63,7 +63,6 @@
   <link rel="modulepreload" href="js/ui/views/admin/settings.js" />
   <link rel="modulepreload" href="js/ui/views/admin/shifts.js" />
   <link rel="modulepreload" href="js/ui/views/changepw.js" />
-  <link rel="modulepreload" href="js/ui/views/recover.js" />
   <link rel="modulepreload" href="js/ui/views/setup.js" />
   <link rel="modulepreload" href="js/ui/views/signin.js" />
   <link rel="modulepreload" href="js/ui/views/staff.js" />
@@ -80,10 +79,9 @@
     </div>
   </div>
 
-  <!-- Storage backend — exactly one of these. Firebase is live. The other two
-       still work if you ever need to switch back:
-         <script src="js/storage/storage-local.js"></script>    (per-device only, for testing)
-         <script src="js/storage/storage-gsheets.js"></script>  (previous backend; the Sheet is kept intact)
+  <!-- Storage + sign-in backend. Since v17 sign-in runs through Firebase
+       Authentication (window.storageAuth), so the older storage-local.js /
+       storage-gsheets.js adapters can no longer be swapped in here.
        Firebase must stay a type="module" script placed BEFORE app.js — module
        scripts run in document order, so window.storage exists when app.js boots. -->
   <script type="module" src="js/storage/storage-firebase.js"></script>

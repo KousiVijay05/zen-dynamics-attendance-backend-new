@@ -549,3 +549,60 @@ blur). A person deactivated elsewhere is signed out live.
 **Tested:** 14 unit tests (shift picking, payroll lateness) and 12
 end-to-end tests against the Firebase local emulator (never the live
 database), using a faked clock for the shift-time cases. All passing.
+
+## 2026-10-01 — Real sign-in security (v17, free plan)
+
+Until now the database was readable and writable by anyone with the
+link: every staff member's password, everyone's attendance, and the
+workplace itself. The sign-in screen only *looked* like a lock.
+
+**Now (all on Firebase's free Spark plan — no card, no server code):**
+- **Sign-in runs through Firebase Authentication.** Passwords are stored
+  hashed by Google, never in the database. Nobody — admins included — can
+  see a password. An admin who needs to help someone sets a **new
+  temporary password** (People → Edit → "New temporary password"); the
+  person must pick their own at next sign-in. *Trade-off accepted: admins
+  can no longer look passwords up.* Minimum length is now 6 (Firebase's).
+- **Database rules enforce who sees what** (`firebase/database.rules.json`),
+  checked by Google's servers even against someone calling the database
+  directly. Membership lives in small admin-only records:
+  `/uidmap/<account>` = staff id (present only while active),
+  `/admins/<staff id>`, `/mustchange/<staff id>`, `/logins/<user ID>`.
+  - signed out, or an account that isn't linked to an active staff member
+    (Firebase lets anyone create an account — it gets nothing): only the
+    workplace name and site;
+  - staff: their own profile, attendance and leave requests; settings
+    read-only. They **cannot approve their own leave** (decisions live in
+    an admin-only `leavedec:<id>` key) or make themselves admin;
+  - admins: everything.
+- **First-time setup** is allowed by the rules only while no workplace
+  exists — the "someone registered over my company" attack is closed for
+  good. The "Delete this workplace" link is gone.
+- **Admin actions** are single all-or-nothing database writes from the
+  admin's phone: adding someone creates their sign-in account; turning
+  someone off unlinks their account (their phone is signed out within a
+  second); a password reset issues a fresh account with the temporary
+  password and unlinks the old one (records are keyed by staff id, so
+  nothing is lost). The app refuses to let an admin deactivate/demote
+  themselves or remove the last active admin.
+- **No in-app "recover administrator" screen** any more — nothing on the
+  free plan could check "no admin left" safely. If every admin is ever
+  locked out, fix it in the Firebase console (README → Security).
+- Phones cache only the signed-in person's own data, and sign-out clears
+  it (shared phones). Offline punches still queue and replay — only under
+  the person who made them.
+- `profile:<id>` is each person's own copy of their roster entry (shifts,
+  tasks, working days) so staff never need the full staff list.
+
+**Migration:** `firebase/migrate-security.js` (dry run by default). Backs
+up the database, creates a sign-in account per staff member with their
+current password, marks everyone "must change password", links accounts,
+splits leave into the new keys, strips passwords from the roster and from
+the old Google Sheet.
+
+**Tested** against the Firebase emulators (database + auth — never the
+live project): 73 security end-to-end tests (direct database calls the
+way an attacker would try them — including a stranger with their own
+self-made account — plus the UI flows), 9 tests on a copy of the live
+data after migration (real passwords replaced with test values), the 12
+live-update/lateness tests and 14 unit tests re-run. All passing.

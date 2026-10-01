@@ -9,7 +9,6 @@
 
 import { state } from "../core/store.js";
 import { vSetup } from "./views/setup.js";
-import { vRecover } from "./views/recover.js";
 import { vSignin } from "./views/signin.js";
 import { vChangePw } from "./views/changepw.js";
 import { vStaff } from "./views/staff.js";
@@ -35,7 +34,6 @@ export function render() {
 
 function view() {
   if (state.view === "setup") return vSetup();
-  if (state.view === "recover") return vRecover();
   if (state.view === "signin") return vSignin();
   if (state.view === "changepw") return vChangePw();
   if (state.view === "staff") return vStaff();

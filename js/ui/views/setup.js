@@ -9,7 +9,7 @@ export function vSetup() {
     '<div class="field"><label for="f_org">Workplace name</label><input id="f_org" type="text" placeholder="e.g. Riverside Clinic" /></div>' +
     '<div class="field"><label for="f_nm">Your name</label><input id="f_nm" type="text" placeholder="Full name" /></div>' +
     '<div class="field"><label for="f_user">Choose a user ID</label><input id="f_user" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="e.g. admin" /></div>' +
-    '<div class="field"><label for="f_pass">Choose a password</label><input id="f_pass" type="password" autocomplete="new-password" placeholder="At least 4 characters" /></div>' +
+    '<div class="field"><label for="f_pass">Choose a password</label><input id="f_pass" type="password" autocomplete="new-password" placeholder="At least 6 characters" /></div>' +
     '<h2>Where staff clock in</h2>' +
     '<div class="field"><label>Site coordinates</label><div class="pair">' +
     '<input id="f_lat" class="num" type="text" inputmode="decimal" placeholder="latitude" />' +

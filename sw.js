@@ -1,7 +1,8 @@
 /* Bump CACHE whenever you change any app file, otherwise phones keep
-   serving the old version. v16: per-shift lateness + live admin screens. v15: backend moved from Google
-   Apps Script to Firebase Realtime Database (see CHANGES.md). */
-const CACHE = "attendance-v16";
+   serving the old version. v17: Firebase Authentication + per-user database
+   rules. v16: per-shift lateness + live admin screens. v15: backend moved from
+   Google Apps Script to Firebase Realtime Database (see CHANGES.md). */
+const CACHE = "attendance-v17";
 const ASSETS = [
   "./", "./index.html", "./manifest.json",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/mark.png", "./icons/logo-lockup.png",
@@ -23,7 +24,7 @@ const ASSETS = [
   "./js/ui/views/admin/index.js", "./js/ui/views/admin/leave.js", "./js/ui/views/admin/onsite.js",
   "./js/ui/views/admin/payroll.js", "./js/ui/views/admin/people.js", "./js/ui/views/admin/records.js",
   "./js/ui/views/admin/settings.js", "./js/ui/views/admin/shifts.js",
-  "./js/ui/views/changepw.js", "./js/ui/views/recover.js", "./js/ui/views/setup.js",
+  "./js/ui/views/changepw.js", "./js/ui/views/setup.js",
   "./js/ui/views/signin.js", "./js/ui/views/staff.js",
   "./js/utils/format.js", "./js/utils/geomath.js"
 ];
@@ -34,7 +35,8 @@ const ASSETS = [
    version here in sync with the imports in storage-firebase.js. */
 const FIREBASE_SDK = [
   "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js",
-  "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js"
+  "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js",
+  "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js"
 ];
 
 self.addEventListener("install", e => {

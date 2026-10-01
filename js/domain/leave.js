@@ -1,10 +1,17 @@
 /* ---------------------------------------------------------------
    Leave requests: staff request a date range, an admin approves or
    rejects it, against a per-year allowance (state.cfg.pay.leavePerYear,
-   default 15). Stored in state.cfg.leaves, saved through the same
-   org:config key as site/pay settings and shifts — so a request made
-   on one device, and its approval on another, both reach every device
-   once Google Sheets storage is wired up.
+   default 15).
+
+   Storage, per staff member (so database rules can keep each person to
+   their own records):
+     leave:<staffId>     their requests  [{ id, from, to, days, reason, requestedAt }]
+                         — written by that person (and admins)
+     leavedec:<staffId>  decisions       { <requestId>: { status, decidedAt, decidedBy } }
+                         — written by admins ONLY, so nobody can approve
+                           their own leave
+   A request with no decision is "pending". allLeaves() returns the
+   combined, flat shape the rest of the app has always used.
 
    A pending request reserves its days against the balance (so two
    overlapping requests can't both be approved past the allowance);
@@ -12,10 +19,39 @@
 ----------------------------------------------------------------*/
 
 import { state } from "../core/store.js";
-import { sset } from "../storage/storage-api.js";
+import { sget, sset } from "../storage/storage-api.js";
 import { uid } from "../utils/format.js";
 
-function saveCfg() { return sset("org:config", state.cfg, true); }
+function data(staffId) {
+  state.leaveData = state.leaveData || {};
+  return state.leaveData[staffId] || (state.leaveData[staffId] = { reqs: [], dec: {} });
+}
+
+/** Loads one person's requests + decisions into state.leaveData. */
+export function loadLeaves(staffId) {
+  return Promise.all([sget("leave:" + staffId, true), sget("leavedec:" + staffId, true)]).then(function (r) {
+    var d = data(staffId);
+    d.reqs = Array.isArray(r[0]) ? r[0] : [];
+    d.dec = r[1] && typeof r[1] === "object" ? r[1] : {};
+  });
+}
+
+/** Every loaded request, flattened with its staffId and decision. */
+export function allLeaves() {
+  var out = [];
+  Object.keys(state.leaveData || {}).forEach(function (staffId) {
+    var d = state.leaveData[staffId];
+    d.reqs.forEach(function (q) {
+      var dec = d.dec[q.id] || {};
+      out.push({
+        id: q.id, staffId: staffId, from: q.from, to: q.to, days: q.days, reason: q.reason || "",
+        requestedAt: q.requestedAt, status: dec.status || "pending",
+        decidedAt: dec.decidedAt || null, decidedBy: dec.decidedBy || null
+      });
+    });
+  });
+  return out;
+}
 
 /** Inclusive day count between two "yyyy-mm-dd" dates. */
 export function leaveDaysBetween(from, to) {
@@ -25,7 +61,7 @@ export function leaveDaysBetween(from, to) {
 }
 
 export function leavesFor(staffId) {
-  return (state.cfg.leaves || []).filter(function (l) { return l.staffId === staffId; });
+  return allLeaves().filter(function (l) { return l.staffId === staffId; });
 }
 
 /** { total, used, pending, remaining } for one staff member in a given calendar year. */
@@ -54,30 +90,26 @@ export function requestLeave(staffId, fields) {
   var bal = leaveBalance(staffId, +from.slice(0, 4));
   if (days > bal.remaining) throw new Error("Only " + bal.remaining + " day(s) of leave left this year.");
 
-  state.cfg.leaves = state.cfg.leaves || [];
-  state.cfg.leaves.unshift({
-    id: uid(), staffId: staffId, from: from, to: to, days: days, reason: reason,
-    status: "pending", requestedAt: Date.now(), decidedAt: null, decidedBy: null
-  });
-  return saveCfg().then(function () { return "Leave request submitted."; });
+  var d = data(staffId);
+  d.reqs.unshift({ id: uid(), from: from, to: to, days: days, reason: reason, requestedAt: Date.now() });
+  return sset("leave:" + staffId, d.reqs, true).then(function () { return "Leave request submitted."; });
 }
 
 /** Staff-facing: withdraw a request that's still pending. */
 export function cancelLeave(id, staffId) {
-  var l = (state.cfg.leaves || []).filter(function (x) { return x.id === id; })[0];
-  if (!l || l.staffId !== staffId || l.status !== "pending") throw new Error("That request can't be cancelled.");
-  state.cfg.leaves = state.cfg.leaves.filter(function (x) { return x.id !== id; });
-  return saveCfg().then(function () { return "Request cancelled."; });
+  var d = data(staffId);
+  if (d.dec[id] || !d.reqs.some(function (q) { return q.id === id; })) throw new Error("That request can't be cancelled.");
+  d.reqs = d.reqs.filter(function (q) { return q.id !== id; });
+  return sset("leave:" + staffId, d.reqs, true).then(function () { return "Request cancelled."; });
 }
 
 /** Admin-facing: approve or reject a pending request. */
 export function decideLeave(id, approve, byName) {
-  var l = (state.cfg.leaves || []).filter(function (x) { return x.id === id; })[0];
+  var l = allLeaves().filter(function (x) { return x.id === id; })[0];
   if (!l || l.status !== "pending") throw new Error("That request was already decided.");
-  l.status = approve ? "approved" : "rejected";
-  l.decidedAt = Date.now();
-  l.decidedBy = byName || null;
-  return saveCfg().then(function () { return approve ? "Leave approved." : "Leave rejected."; });
+  var d = data(l.staffId);
+  d.dec[id] = { status: approve ? "approved" : "rejected", decidedAt: Date.now(), decidedBy: byName || null };
+  return sset("leavedec:" + l.staffId, d.dec, true).then(function () { return approve ? "Leave approved." : "Leave rejected."; });
 }
 
 /** Used by payroll.js: is `dayK` ("yyyy-mm-dd") covered by an approved leave for this staff member? */

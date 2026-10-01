@@ -25,8 +25,8 @@ export var state = {
   logs: {}, adminLoaded: false,
   period: "week", month: ymKey(Date.now()), recPerson: "all",
   editId: null, editShiftId: null, adminOnly: false,
-  /* password value the People edit form opened with — see roster.js updateStaff() */
-  editPwShown: null,
+  /* leave requests + decisions per staff id — see domain/leave.js */
+  leaveData: {},
   /* id of the roster entry mid-forced-password-change (view === "changepw") */
   changePwFor: null,
   /* fatal boot/render error, shown by the error-boundary view instead of a blank screen */

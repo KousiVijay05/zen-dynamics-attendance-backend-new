@@ -2,6 +2,7 @@
 
 import { state } from "../../../core/store.js";
 import { esc } from "../../../utils/format.js";
+import { allLeaves } from "../../../domain/leave.js";
 
 function nameFor(id) {
   var p = state.roster.filter(function (x) { return x.id === id; })[0];
@@ -35,7 +36,7 @@ function row(l, showActions) {
 }
 
 export function tabLeaveAdmin() {
-  var leaves = (state.cfg.leaves || []).slice().sort(function (a, b) { return b.requestedAt - a.requestedAt; });
+  var leaves = allLeaves().sort(function (a, b) { return b.requestedAt - a.requestedAt; });
   var pending = leaves.filter(function (l) { return l.status === "pending"; });
   var history = leaves.filter(function (l) { return l.status !== "pending"; });
 

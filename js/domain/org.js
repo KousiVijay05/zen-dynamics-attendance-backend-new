@@ -12,6 +12,14 @@ import { num, uid } from "../utils/format.js";
 
 function saveCfg() { return sset("org:config", state.cfg, true); }
 
+/* The pre-sign-in subset the sign-in screen needs (name, site, lock
+   behaviour) — the only record readable without signing in. Keep in
+   step with publicOf() in auth.js. */
+function savePublic() {
+  var c = state.cfg;
+  return sset("org:public", { org: c.org, site: c.site, lockOutside: c.lockOutside, adminAnywhere: c.adminAnywhere, demo: c.demo }, true);
+}
+
 /**
  * Shift Master (Admin -> Shifts). Shifts live in state.cfg.shifts, saved
  * through the same org:config key as site/pay settings, so a shift an
@@ -46,11 +54,20 @@ export function updateShift(id, fields) {
 export function deleteShift(id) {
   state.cfg.shifts = state.cfg.shifts.filter(function (s) { return s.id !== id; });
   /* Also drop the shift from anyone it's assigned to, so a stale id never
-     silently disappears from someone's clock-in without explanation. */
+     silently disappears from someone's clock-in without explanation. Each
+     affected person's own profile:<id> (what their device reads) too. */
+  var writes = [saveCfg()];
+  var stored = function (p) { var c = Object.assign({}, p); delete c.mustChangePassword; return c; };  // display-only flag
+  var touched = false;
   state.roster.forEach(function (p) {
-    if (Array.isArray(p.shifts)) p.shifts = p.shifts.filter(function (sid) { return sid !== id; });
+    if (Array.isArray(p.shifts) && p.shifts.indexOf(id) >= 0) {
+      p.shifts = p.shifts.filter(function (sid) { return sid !== id; });
+      writes.push(sset("profile:" + p.id, stored(p), true));
+      touched = true;
+    }
   });
-  return Promise.all([saveCfg(), sset("org:roster", state.roster, true)]).then(function () { return "Shift deleted."; });
+  if (touched) writes.push(sset("org:roster", state.roster.map(stored), true));
+  return Promise.all(writes).then(function () { return "Shift deleted."; });
 }
 
 export function startEditShift(id) { state.editShiftId = id; state.msg = ""; emitChange(); }
@@ -100,5 +117,5 @@ export function saveSiteSettings(fields) {
   state.cfg.graceMin = Math.max(0, g2);
   state.cfg.adminAnywhere = !!fields.adminAnywhere;
   state.cfg.demo = !!fields.demo;
-  return saveCfg().then(function () { return "Settings saved."; });
+  return Promise.all([saveCfg(), savePublic()]).then(function () { return "Settings saved."; });
 }

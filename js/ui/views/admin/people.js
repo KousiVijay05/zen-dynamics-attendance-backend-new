@@ -1,6 +1,6 @@
 /* "People" tab: staff list, edit form, add-staff form. Ported verbatim from tabPeople() in the original app.js. */
 import { state } from "../../../core/store.js";
-import { esc } from "../../../utils/format.js";
+import { esc, hm12 } from "../../../utils/format.js";
 import { money } from "../../../domain/payroll.js";
 
 export function tabPeople() {
@@ -21,12 +21,12 @@ var shiftOptions2 = '<option value="">No shift</option>';
 availableShifts.forEach(function (s) {
   shiftOptions1 += '<option value="' + esc(s.id) + '"' +
     (assignedShifts[0] === s.id ? ' selected' : '') + '>' +
-    esc(s.name) + ' (' + esc(s.start) + '–' + esc(s.end) + ')' +
+    esc(s.name) + ' (' + esc(hm12(s.start)) + '–' + esc(hm12(s.end)) + ')' +
     '</option>';
 
   shiftOptions2 += '<option value="' + esc(s.id) + '"' +
     (assignedShifts[1] === s.id ? ' selected' : '') + '>' +
-    esc(s.name) + ' (' + esc(s.start) + '–' + esc(s.end) + ')' +
+    esc(s.name) + ' (' + esc(hm12(s.start)) + '–' + esc(hm12(s.end)) + ')' +
     '</option>';
 });
       html += "<h2>Edit " + esc(p.name) + "</h2>" +

@@ -520,3 +520,32 @@ reopen through the service worker. All passing; test data wiped after.
 **Security model unchanged:** the Firebase web config is public by
 design, and the rules let any visitor read/write the allowed keys — the
 same exposure the shared `SECRET` had. See README's Security section.
+
+## 2026-10-01 — Late arrival per shift, live admin screens
+
+**Late arrival per shift (payroll callout — see payroll.js header).**
+"Late" was measured only against the single Payroll Rules "Shift starts"
+time, so anyone on an evening shift was marked late every day. It's now
+measured against the start of the shift that day's first clock-in was
+tagged with, falling back to the global time when there's no shift.
+Grace minutes and the late-deduction rule are unchanged. Records uses the
+same rule and now shows which shift each punch counted against.
+
+Also fixed: with two shifts assigned, a clock-in *before* either had
+started fell back to the first one — arriving at 4:45 PM for a 5:00 PM
+shift was tagged as the morning shift. `pickShift()` now takes the
+nearest start among shifts that haven't ended.
+
+Shift times now display with AM/PM in Shift Master and the People shift
+picker — the live data had two "evening" shifts saved as morning times
+(04:50, 05:30), easy to miss in 24h format.
+
+**Live admin screens.** storage-firebase.js fires `storage-remote-change`
+when another device's save lands; app.js pulls the changed keys into
+state and redraws — On site, Records, Leave, People update within ~0.1s
+with no Refresh. Never redraws under someone mid-typing (catches up on
+blur). A person deactivated elsewhere is signed out live.
+
+**Tested:** 14 unit tests (shift picking, payroll lateness) and 12
+end-to-end tests against the Firebase local emulator (never the live
+database), using a faked clock for the shift-time cases. All passing.

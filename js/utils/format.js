@@ -73,4 +73,13 @@ export function parseHM(s) {
   return m ? (+m[1]) * 60 + (+m[2]) : 540;
 }
 
+/** "HH:MM" (24h) -> "4:50 PM". Shift times are entered via <input type="time">,
+    whose AM/PM is easy to miss on a phone; showing it makes a slip obvious. */
+export function hm12(s) {
+  var m = /^(\d{1,2}):(\d{2})$/.exec(String(s || "").trim());
+  if (!m) return String(s || "");
+  var h = +m[1];
+  return ((h % 12) || 12) + ":" + m[2] + " " + (h < 12 ? "AM" : "PM");
+}
+
 export var DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];

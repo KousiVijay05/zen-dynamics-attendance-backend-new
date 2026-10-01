@@ -19,6 +19,14 @@
    deducted as an absence. It's checked before the present/absent
    ladder below, so it takes priority over what the punches (or lack
    of them) on that day would otherwise say.
+
+   EXPLICIT CALLOUT (2026-10-01): "late" used to be measured only
+   against the single global Payroll Rules "Shift starts" time. It's now
+   measured against the start time of the shift that day's first
+   clock-in was tagged with (assigned in Admin -> People, captured at
+   clock-in), falling back to the global time when there's no shift.
+   The grace minutes and the late-deduction rule are unchanged. Effect:
+   someone on an evening shift is no longer marked late every day.
 ----------------------------------------------------------------*/
 
 import { state } from "../core/store.js";
@@ -37,9 +45,9 @@ export function dailyMap(id, ym) {
   (state.logs[k] || []).forEach(function (e) {
     if (!e.end) return;
     var d = dayKey(e.start);
-    if (!map[d]) map[d] = { ms: 0, first: e.start, last: e.end };
+    if (!map[d]) map[d] = { ms: 0, first: e.start, last: e.end, firstShiftStart: e.shiftStart || null };
     map[d].ms += e.end - e.start;
-    if (e.start < map[d].first) map[d].first = e.start;
+    if (e.start < map[d].first) { map[d].first = e.start; map[d].firstShiftStart = e.shiftStart || null; }
     if (e.end > map[d].last) map[d].last = e.end;
   });
   return map;
@@ -77,7 +85,8 @@ export function payrollFor(p, ym) {
     else status = k === todayK ? "—" : "Absent";
 
     var late = false;
-    if (rec && !isOff && minsOfDay(rec.first) > shiftStart + P.lateGrace) late = true;
+    var dayStart = rec && rec.firstShiftStart ? parseHM(rec.firstShiftStart) : shiftStart;
+    if (rec && !isOff && minsOfDay(rec.first) > dayStart + P.lateGrace) late = true;
 
     if (!isOff && !future && k !== todayK) r.workingDays++;
     if (!isOff) {

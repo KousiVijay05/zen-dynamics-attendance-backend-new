@@ -1,7 +1,7 @@
 /* Admin: Shift Master */
 
 import { state } from "../../../core/store.js";
-import { esc } from "../../../utils/format.js";
+import { esc, hm12 } from "../../../utils/format.js";
 
 export function tabShifts() {
   var html = "";
@@ -54,7 +54,7 @@ export function tabShifts() {
             '<span class="who">' + esc(s.name) + "</span>" +
             "<br>" +
             '<span class="meta">' +
-              esc(s.start) + " – " + esc(s.end) +
+              esc(hm12(s.start)) + " – " + esc(hm12(s.end)) +
             "</span>" +
           "</span>" +
 

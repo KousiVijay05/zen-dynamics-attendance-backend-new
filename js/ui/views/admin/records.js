@@ -87,7 +87,8 @@ export function tabRecords() {
       var late = false;
 
       if (e.start && shiftStart !== null) {
-        late = minsOfDay(e.start) > shiftStart + grace;
+        /* Same rule as payroll.js: the punch's own shift start if it had one. */
+        late = minsOfDay(e.start) > (e.shiftStart ? parseHM(e.shiftStart) : shiftStart) + grace;
       }
 
       var when = tClock(e.start) +
@@ -134,6 +135,7 @@ export function tabRecords() {
               ? '<span class="who">' + esc(p.name) + '</span><br>'
               : "") +
             '<span class="span">' + when + tags + '</span>' +
+            (e.shiftName ? '<br><span class="meta">' + esc(e.shiftName) + ' (' + esc(e.shiftStart) + '–' + esc(e.shiftEnd) + ')</span>' : "") +
             taskHtml +
           '</div>' +
           '<span class="dur">' +

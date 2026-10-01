@@ -32,7 +32,7 @@
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import {
-  getDatabase, ref, onValue, set as fbSet, remove as fbRemove, get as fbGet
+  getDatabase, ref, onValue, set as fbSet, remove as fbRemove, get as fbGet, connectDatabaseEmulator
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js";
 
 var FIREBASE_CONFIG = {
@@ -54,6 +54,13 @@ var QUEUE_KEY = LOCAL_PREFIX + "fbqueue";
 var SNAPSHOT_KEY = "fbsnapshot";
 
 var db = getDatabase(initializeApp(FIREBASE_CONFIG));
+
+/* Testing only: on localhost with ?emulator=1, use the Firebase Local
+   Emulator Suite instead of the live database. Can't trigger on the
+   deployed site (hostname check). */
+var USE_EMULATOR = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) && /[?&]emulator=1\b/.test(location.search);
+if (USE_EMULATOR) connectDatabaseEmulator(db, "127.0.0.1", 9000);
+
 var kvRef = ref(db, "kv");
 
 var cache = {};
@@ -75,11 +82,23 @@ function saveSnapshot() { lsSet(SNAPSHOT_KEY, JSON.stringify(cache)); }
 /* Queued writes are newer than anything the server has, so they win. */
 function overlayQueue() { queue.forEach(function (it) { cache[it.key] = it.value; }); }
 
+var loadedOnce = false;
 function applyServerValue(val) {
+  var before = cache;
   cache = {};
   if (val) Object.keys(val).forEach(function (k) { cache[k] = String(val[k]); });
   overlayQueue();
   saveSnapshot();
+
+  /* Tell the app which keys changed (another device's save, typically), so
+     open screens can refresh without waiting for a poll or a reload. */
+  var changed = Object.keys(cache).concat(Object.keys(before)).filter(function (k, i, all) {
+    return all.indexOf(k) === i && cache[k] !== before[k];
+  });
+  if (loadedOnce && changed.length) {
+    window.dispatchEvent(new CustomEvent("storage-remote-change", { detail: { keys: changed } }));
+  }
+  loadedOnce = true;
 }
 
 /* ---------- writes ---------- */

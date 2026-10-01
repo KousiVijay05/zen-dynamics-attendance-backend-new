@@ -11,7 +11,7 @@
 
 import { state, geo, fenceState, emitChange } from "../core/store.js";
 import { sget, sset } from "../storage/storage-api.js";
-import { uid, dayKey, monKey } from "../utils/format.js";
+import { uid, dayKey, monKey, minsOfDay, parseHM } from "../utils/format.js";
 import { distanceNow } from "./geofence.js";
 
 export function logKey(id, ts) { return "log:" + id + ":" + monKey(ts); }
@@ -71,26 +71,26 @@ function getAssignedShiftsForToday(id) {
   }).filter(Boolean);
 }
 
+/**
+ * Which of today's assigned shifts a clock-in at `nowMins` belongs to:
+ * the one whose start is closest, among shifts that haven't ended yet
+ * (so arriving early for the evening shift isn't read as very late for
+ * the morning one); if all have ended, the closest start overall.
+ */
+export function pickShift(shifts, nowMins) {
+  if (!shifts.length) return null;
+  var open = shifts.filter(function (s) { return nowMins <= parseHM(s.end); });
+  var pool = open.length ? open : shifts;
+  return pool.slice().sort(function (a, b) {
+    return Math.abs(nowMins - parseHM(a.start)) - Math.abs(nowMins - parseHM(b.start));
+  })[0];
+}
+
 /** Clock in the signed-in staff member. No-op if outside the geofence. */
 export function clockIn() {
   if (!inZoneForClockIn()) return;
   var now = Date.now(), k = logKey(state.me.id, now);
-  var todaysShifts = getAssignedShiftsForToday(state.me.id);
-var currentShift = todaysShifts.length ? todaysShifts[0] : null;
-
-if (todaysShifts.length > 1) {
-  var currentMinutes = new Date(now).getHours() * 60 + new Date(now).getMinutes();
-
-  currentShift = todaysShifts.find(function (s) {
-    var startParts = s.start.split(":");
-    var endParts = s.end.split(":");
-
-    var startMinutes = Number(startParts[0]) * 60 + Number(startParts[1]);
-    var endMinutes = Number(endParts[0]) * 60 + Number(endParts[1]);
-
-    return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
-  }) || todaysShifts[0];
-}
+  var currentShift = pickShift(getAssignedShiftsForToday(state.me.id), minsOfDay(now));
   state.logs[k] = state.logs[k] || [];
   var person = state.roster.find(function (p) {
     return p.id === state.me.id;

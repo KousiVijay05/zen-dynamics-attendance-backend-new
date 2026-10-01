@@ -1,7 +1,7 @@
 /* Bump CACHE whenever you change any app file, otherwise phones keep
-   serving the old version. Bumped to v15: backend moved from Google
+   serving the old version. v16: per-shift lateness + live admin screens. v15: backend moved from Google
    Apps Script to Firebase Realtime Database (see CHANGES.md). */
-const CACHE = "attendance-v15";
+const CACHE = "attendance-v16";
 const ASSETS = [
   "./", "./index.html", "./manifest.json",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/mark.png", "./icons/logo-lockup.png",

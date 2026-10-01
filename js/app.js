@@ -19,8 +19,9 @@ import { sget } from "./storage/storage-api.js";
 import { render } from "./ui/render.js";
 import { initEvents } from "./events/handlers.js";
 import { startWatch, startTick } from "./domain/geofence.js";
-import { signIn } from "./domain/auth.js";
+import { signIn, signOut } from "./domain/auth.js";
 import { loadLog } from "./domain/attendance.js";
+import { userIsTyping } from "./ui/dom.js";
 
 onChange(render);
 initEvents();
@@ -63,4 +64,43 @@ boot().catch(function (err) {
   console.error("Boot failed:", err);
   state.fatal = err;
   emitChange();
+});
+
+/* ---------- live updates from other devices ----------
+   storage-firebase.js fires this when another device's save lands. Pull the
+   changed keys into app state so open screens (admin On site / Records /
+   People, a staff dashboard) show it within a second instead of after a
+   Refresh tap or reload. Never re-render under someone mid-typing — that
+   would wipe the field (see userIsTyping in ui/dom.js); catch up on blur. */
+var redrawPending = false;
+
+window.addEventListener("storage-remote-change", function (ev) {
+  if (!state.cfg) return;   // still on setup/boot — nothing loaded to refresh
+  var keys = ev.detail.keys;
+  var jobs = keys.map(function (k) {
+    return sget(k, true).then(function (v) {
+      if (k === "org:config") { if (v) state.cfg = withConfigDefaults(v); }
+      else if (k === "org:roster") { if (Array.isArray(v)) applyRoster(v); }
+      else if (k in state.logs) state.logs[k] = v || [];
+    });
+  });
+  Promise.all(jobs).then(redraw);
+});
+
+function applyRoster(roster) {
+  state.roster = roster;
+  if (!state.me) return;
+  var me = roster.filter(function (p) { return p.id === state.me.id; })[0];
+  if (!me || me.active === false) { signOut(); return; }   // deactivated or removed elsewhere
+  state.me = me;
+}
+
+function redraw() {
+  if (userIsTyping()) { redrawPending = true; return; }
+  redrawPending = false;
+  emitChange();
+}
+
+document.addEventListener("focusout", function () {
+  if (redrawPending) setTimeout(redraw, 0);   // after focus has actually moved
 });

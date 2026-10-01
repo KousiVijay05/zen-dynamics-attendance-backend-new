@@ -1,0 +1,13 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "kv": {
+      ".read": true,
+      "$key": {
+        ".write": "$key.matches(/^(org:config|org:roster|log:[A-Za-z0-9_-]{1,64}:[0-9]{6})$/)",
+        ".validate": "newData.isString() && newData.val().length <= 200000"
+      }
+    }
+  }
+}

@@ -62,15 +62,31 @@ python3 -m http.server 8080
 # open http://localhost:8080/index.html
 ```
 
-By default it uses `js/storage/storage-local.js` (per-device localStorage
-— good for trying it out solo). First run takes you through workplace
-setup automatically.
+`index.html` loads the live Firebase backend, so a local copy talks to
+the real workplace data. To try things out without touching it, swap the
+storage `<script>` line in `index.html` to `js/storage/storage-local.js`
+(per-device localStorage) — first run then takes you through workplace
+setup.
 
-## Setting up shared storage (Google Sheets)
+## Shared storage: Firebase (current)
 
-For real use — where every staff phone and the admin see the same
-records — follow `google-apps-script/README-google-sheets.md` end to end.
-Short version:
+Data lives in the Firebase Realtime Database of project
+`zen-dynamics-attendance-a2f73` (region `asia-southeast1`), at `/kv`.
+
+- Config: top of `js/storage/storage-firebase.js` (public by design).
+- Security rules: `firebase/database.rules.json` — deploy changes from the
+  Firebase console (Realtime Database → Rules) or the Firebase CLI.
+- Data console: Firebase console → Realtime Database → Data.
+- Copying data from the old Sheet: `node firebase/migrate-from-sheets.js
+  --dry-run` (read-only), then without the flag; `--catch-up` merges in
+  punches made from a device still on the old version after a switch.
+
+## Previous backend: Google Sheets (fallback)
+
+Still works and its Sheet is kept intact. To switch back, point the
+storage `<script>` line in `index.html` at `js/storage/storage-gsheets.js`
+(a classic `<script>`, not `type="module"`). Original setup, for
+reference:
 
 1. Create a Google Sheet, paste `google-apps-script/Code.gs` into its
    Apps Script editor, set a strong `SECRET`, run `setup()` once, deploy as
@@ -197,6 +213,12 @@ read/write access to the whole spreadsheet through the Apps Script
 endpoint directly — no username or password needed. This is true of
 any purely static front end talking to a shared-secret backend; it is
 not something obfuscating or minifying the JS fixes.
+
+**On Firebase (current backend) the same applies:** the web config in
+`js/storage/storage-firebase.js` is public by design, and
+`firebase/database.rules.json` lets any visitor read and write the
+allowed `/kv` keys — the same exposure `SECRET` had. The rules only
+enforce key shape and size, like `Code.gs` did.
 
 Also worth knowing: usernames and passwords are stored in plaintext in
 `org:roster`, deliberately — an admin can see and reset anyone's

@@ -1,9 +1,7 @@
 /* Bump CACHE whenever you change any app file, otherwise phones keep
-   serving the old version. Bumped to v14: fixed the recovery flow
-   corrupting real accounts — stale-roster overwrite guard on
-   createAdminRecovery(), and "Recover administrator access" no longer
-   a standing link on a clean sign-in screen (see CHANGES.md). */
-const CACHE = "attendance-v14";
+   serving the old version. Bumped to v15: backend moved from Google
+   Apps Script to Firebase Realtime Database (see CHANGES.md). */
+const CACHE = "attendance-v15";
 const ASSETS = [
   "./", "./index.html", "./manifest.json",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/mark.png", "./icons/logo-lockup.png",
@@ -17,7 +15,8 @@ const ASSETS = [
   "./js/domain/geofence.js", "./js/domain/leave.js", "./js/domain/org.js",
   "./js/domain/payroll.js", "./js/domain/roster.js",
   "./js/events/handlers.js",
-  "./js/storage/storage-api.js", "./js/storage/storage-gsheets.js", "./js/storage/storage-local.js",
+  "./js/storage/storage-api.js", "./js/storage/storage-firebase.js",
+  "./js/storage/storage-gsheets.js", "./js/storage/storage-local.js",
   "./js/ui/dom.js", "./js/ui/notify.js", "./js/ui/render.js",
   "./js/ui/components/brand.js", "./js/ui/components/monthOptions.js",
   "./js/ui/components/proximity.js", "./js/ui/components/syncStatus.js",
@@ -29,9 +28,18 @@ const ASSETS = [
   "./js/utils/format.js", "./js/utils/geomath.js"
 ];
 
+/* Firebase SDK, loaded cross-origin by js/storage/storage-firebase.js.
+   Version-pinned URLs never change content, so cache-first is safe — and
+   without this an offline reopen can't load the SDK at all. Keep the
+   version here in sync with the imports in storage-firebase.js. */
+const FIREBASE_SDK = [
+  "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js",
+  "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js"
+];
+
 self.addEventListener("install", e => {
   self.skipWaiting();
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).catch(() => {}));
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS.concat(FIREBASE_SDK))).catch(() => {}));
 });
 
 self.addEventListener("activate", e => {
@@ -43,7 +51,15 @@ self.addEventListener("activate", e => {
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
   const url = new URL(e.request.url);
-  if (url.origin !== location.origin) return;           // let the CDN handle its own
+  if (url.origin === "https://www.gstatic.com" && url.pathname.indexOf("/firebasejs/") === 0) {
+    e.respondWith(caches.match(e.request).then(hit => hit || fetch(e.request).then(r => {
+      const copy = r.clone();
+      caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
+      return r;
+    })));
+    return;
+  }
+  if (url.origin !== location.origin) return;           // let other CDNs handle their own
   e.respondWith(
     /* cache: "no-store" bypasses the browser's own HTTP cache (GitHub Pages
        sends Cache-Control: max-age=600 on every file), so "network first"

@@ -80,12 +80,13 @@
     </div>
   </div>
 
-  <!-- Storage: localStorage (per device), the default. To store data in
-       Google Sheets instead so every device sees the same records, swap
-       this line for js/storage/storage-gsheets.js and follow
-       google-apps-script/README-google-sheets.md. -->
-  <!-- <script src="js/storage/storage-local.js"></script> -->
-<script src="js/storage/storage-gsheets.js"></script>
+  <!-- Storage backend — exactly one of these. Firebase is live. The other two
+       still work if you ever need to switch back:
+         <script src="js/storage/storage-local.js"></script>    (per-device only, for testing)
+         <script src="js/storage/storage-gsheets.js"></script>  (previous backend; the Sheet is kept intact)
+       Firebase must stay a type="module" script placed BEFORE app.js — module
+       scripts run in document order, so window.storage exists when app.js boots. -->
+  <script type="module" src="js/storage/storage-firebase.js"></script>
 
   <script type="module" src="js/app.js"></script>
 

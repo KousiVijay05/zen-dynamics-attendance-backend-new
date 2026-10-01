@@ -457,3 +457,66 @@ after a redesign — not just the data-writing function behind it — gets
 checked for whether the ORIGINAL app gated its visibility for a
 reason, before assuming a straight port of "what it does when clicked"
 was the whole story.
+
+## 2026-09-24 — Apps Script: reads no longer wait on the write lock
+
+`Code.gs`'s `doPost()` took the exclusive script lock for every request,
+including the `all` read every device polls. Reads now skip it; writes
+still take it. Deployed to the live Apps Script project the same day
+(this entry records it in the repo).
+
+## 2026-10-01 — Backend moved from Google Apps Script to Firebase
+
+**Why:** measured Apps Script round-trips of 3–70+ seconds per request,
+on a dataset of 7 keys — platform latency, not data size or our code.
+Firebase Realtime Database acknowledges writes in ~2–60ms in testing and
+pushes other devices' changes in ~120ms instead of a 60-second poll.
+
+**What changed:**
+- New `js/storage/storage-firebase.js` — same `window.storage`
+  contract, `storageSync()`, `storageStatus()` and private-key prefix as
+  `storage-gsheets.js`, so nothing above the storage layer changed.
+  Data lives at `/kv/<key>` as the same JSON strings.
+- Validation moved from `Code.gs` to `firebase/database.rules.json`:
+  same key allowlist, same 200,000-char cap, string values only, nothing
+  readable or writable outside `/kv`.
+- Offline: writes go to a persisted localStorage queue and leave it only
+  on server acknowledgement (survives a reload with no signal). The
+  service worker now also caches the version-pinned Firebase SDK, so the
+  app still opens offline from the last saved copy.
+- `js/app.js`: if no storage backend loaded at all (SDK unreachable on a
+  first visit), boot stops with a clear error instead of an empty store
+  that would read as "no workplace" and show the setup screen.
+- The Google Sheet is untouched and remains a working fallback: swapping
+  the `<script>` line in `index.html` back to `storage-gsheets.js`
+  reverts. `firebase/migrate-from-sheets.js` copies data across
+  (`--dry-run`, default copy, and `--catch-up` to merge in punches made
+  from a device still running the old version after cutover).
+- Lost in the move: Apps Script rebuilt human-readable "Shifts"/"Staff"
+  tabs in the Sheet on every write. Firebase doesn't; the Excel export
+  (Payroll/Records → Download Excel) covers the same need.
+
+**Bugs found while testing the move (fixed here, affected the Sheets
+backend too):**
+- **Stale roster on an open tab.** Login, password change, and every
+  People-tab save read/wrote the roster copy loaded at page boot. Result:
+  a sign-in device left open couldn't log in a newly added person, and —
+  worse — an admin tab left open would save its old copy over newer
+  changes (e.g. silently reverting a staff member's own new password).
+  All of these now refresh from storage first (`refreshRoster()` in
+  `js/domain/roster.js`), and the edit form compares against the
+  password it was opened with, so an untouched field never reverts one
+  changed elsewhere.
+- **Working days never saved.** `updateStaff()` received the edit form's
+  working-day checkboxes and dropped them. Now persisted.
+
+**Tested:** 18 automated scenarios against the real (then-empty)
+Firebase project — boot, setup, persistence across devices, real-time
+sync, forced password change, clock-in/out, leave, the stale-tab and
+working-days fixes, offline queue + banner + recovery, and SDK-blocked
+safety — plus geofence-lock/recovery-link regression and an offline
+reopen through the service worker. All passing; test data wiped after.
+
+**Security model unchanged:** the Firebase web config is public by
+design, and the rules let any visitor read/write the allowed keys — the
+same exposure the shared `SECRET` had. See README's Security section.

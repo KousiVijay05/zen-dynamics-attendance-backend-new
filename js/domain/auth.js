@@ -30,6 +30,7 @@ import { uid, dayKey } from "../utils/format.js";
 import { defaultPay } from "../core/config.js";
 import { startWatch, startTick } from "./geofence.js";
 import { loadLog } from "./attendance.js";
+import { refreshRoster } from "./roster.js";
 
 var PASSWORD_MIN = 4;
 
@@ -169,32 +170,38 @@ export function showAdminOnly(on) { state.adminOnly = !!on; state.msg = ""; emit
  */
 export function attemptLogin(fields) {
   var username = fields.username, password = (fields.password || "").trim();
-  var p = findByUsername(username);
-  var ok = p && p.active !== false && p.password === password;
 
-  if (!ok) {
-    state.msg = "User ID or password is incorrect."; state.msgOk = false;
-    emitChange();
-    return Promise.resolve();
-  }
+  /* Check against the latest roster, not the copy this page loaded at
+     boot — a shared sign-in device left open all day would otherwise
+     reject someone the admin added (or whose password was reset) since. */
+  return refreshRoster().then(function () {
+    var p = findByUsername(username);
+    var ok = p && p.active !== false && p.password === password;
 
-  /* The geofence lock only ever let admins bypass it (adminAnywhere) —
-     a non-admin whose credentials happen to be correct while the app is
-     showing the locked screen still isn't allowed through here. */
-  if (state.adminOnly && !p.admin) {
-    state.msg = "Only administrators can sign in while outside the site.";
-    state.msgOk = false;
-    emitChange();
-    return Promise.resolve();
-  }
+    if (!ok) {
+      state.msg = "User ID or password is incorrect."; state.msgOk = false;
+      emitChange();
+      return;
+    }
 
-  if (p.mustChangePassword) {
-    state.changePwFor = p.id; state.view = "changepw"; state.msg = "";
-    emitChange();
-    return Promise.resolve();
-  }
+    /* The geofence lock only ever let admins bypass it (adminAnywhere) —
+       a non-admin whose credentials happen to be correct while the app is
+       showing the locked screen still isn't allowed through here. */
+    if (state.adminOnly && !p.admin) {
+      state.msg = "Only administrators can sign in while outside the site.";
+      state.msgOk = false;
+      emitChange();
+      return;
+    }
 
-  return signIn(p);
+    if (p.mustChangePassword) {
+      state.changePwFor = p.id; state.view = "changepw"; state.msg = "";
+      emitChange();
+      return;
+    }
+
+    return signIn(p);
+  });
 }
 
 /**
@@ -204,17 +211,22 @@ export function attemptLogin(fields) {
 export function changePassword(fields) {
   var pw = (fields.password || "").trim();
   var confirm = (fields.confirm || "").trim();
-  var p = state.roster.filter(function (x) { return x.id === state.changePwFor; })[0];
-  if (!p) { state.view = "signin"; state.msg = ""; emitChange(); return Promise.resolve(); }
 
   if (pw.length < PASSWORD_MIN) throw new Error("The password must be at least " + PASSWORD_MIN + " characters.");
   if (pw !== confirm) throw new Error("Passwords don't match.");
 
-  p.password = pw;
-  p.mustChangePassword = false;
-  state.changePwFor = null;
+  /* Saves the whole roster, so apply the change to the latest copy —
+     not this page's boot-time one, which could clobber others' edits. */
+  return refreshRoster().then(function () {
+    var p = state.roster.filter(function (x) { return x.id === state.changePwFor; })[0];
+    if (!p) { state.view = "signin"; state.msg = ""; emitChange(); return; }
 
-  return saveRoster().then(function () { return signIn(p); });
+    p.password = pw;
+    p.mustChangePassword = false;
+    state.changePwFor = null;
+
+    return saveRoster().then(function () { return signIn(p); });
+  });
 }
 
 export function backToSignin() {

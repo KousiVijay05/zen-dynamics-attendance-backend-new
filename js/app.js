@@ -27,6 +27,14 @@ initEvents();
 render(); // show the loading skeleton immediately
 
 function boot() {
+  /* No storage backend loaded at all (e.g. the Firebase SDK couldn't be
+     fetched on a first open with no signal). storage-api.js would quietly
+     fall back to an empty in-memory store, which reads as "no workplace
+     exists" and lands on the setup screen — the exact path behind a past
+     overwrite incident. Stop with a clear error instead. */
+  if (!window.storage) {
+    return Promise.reject(new Error("Couldn't reach the attendance server. Check your internet connection and reload."));
+  }
   return Promise.all([sget("org:config", true), sget("org:roster", true), sget("device:last", false)])
     .then(function (r) {
       state.cfg = withConfigDefaults(r[0]);

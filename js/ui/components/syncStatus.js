@@ -1,11 +1,8 @@
 /* ---------------------------------------------------------------
-   A small offline/pending-sync banner. New in this build — the
-   original had the offline queue (storage-gsheets.js) but never
-   surfaced its state to the user, so a clock-in made offline looked
-   identical to one that had actually reached the Sheet. This reads
-   window.storageStatus(), which storage-gsheets.js already exposes
-   (storage-local.js has no such thing, so this quietly does nothing
-   in that mode).
+   A small offline/pending-sync banner: shows when this device is
+   offline or has punches waiting to upload, so a clock-in made offline
+   doesn't look identical to one that reached the server. Reads
+   window.storageStatus() from storage-firebase.js.
 ----------------------------------------------------------------*/
 
 export function syncBanner() {

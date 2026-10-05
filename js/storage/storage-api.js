@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------
-   Thin wrapper around window.storage (set by storage-local.js or
-   storage-gsheets.js — see index.html). Ported verbatim from the
+   Thin wrapper around window.storage (set by storage-firebase.js —
+   see index.html). Ported verbatim from the
    top of the original app.js.
 
    Adds:

@@ -32,8 +32,7 @@
        simply because it hasn't arrived yet. These hints tell the browser to
        start fetching the whole module graph in parallel immediately instead
        of discovering it one file at a time. Keep this list in sync with
-       sw.js's ASSETS (everything under js/ except storage-local.js /
-       storage-gsheets.js, which are classic scripts, not ES modules). -->
+       sw.js's ASSETS (everything under js/). -->
   <link rel="modulepreload" href="js/app.js" />
   <link rel="modulepreload" href="js/core/config.js" />
   <link rel="modulepreload" href="js/core/store.js" />
@@ -81,10 +80,8 @@
     </div>
   </div>
 
-  <!-- Storage + sign-in backend. Since v17 sign-in runs through Firebase
-       Authentication (window.storageAuth), so the older storage-local.js /
-       storage-gsheets.js adapters can no longer be swapped in here.
-       Firebase must stay a type="module" script placed BEFORE app.js — module
+  <!-- Storage + sign-in backend (Firebase).
+       It must stay a type="module" script placed BEFORE app.js — module
        scripts run in document order, so window.storage exists when app.js boots. -->
   <script type="module" src="js/storage/storage-firebase.js"></script>
 

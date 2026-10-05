@@ -626,3 +626,12 @@ Late/absent use the same rules as payroll and Records. New code:
 `js/domain/reports.js` (text), `js/utils/whatsapp.js` (opens WhatsApp).
 Tested: 10 new end-to-end tests on the emulators; security (73),
 live-update (12) and unit (14) suites re-run. All passing.
+
+## 2026-10-05 — Old Google Sheets code removed (v19)
+
+The app has run on Firebase since v15. Removed the unused Sheets backend
+(`google-apps-script/`), its storage adapter (`storage-gsheets.js`), the
+per-device test adapter (`storage-local.js`), and the one-off
+`migrate-from-sheets.js` — about 500 lines. All remain in git history.
+No behaviour change; security, WhatsApp and live-update test suites re-run,
+all passing.

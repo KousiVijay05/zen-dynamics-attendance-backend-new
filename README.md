@@ -1,10 +1,9 @@
 # Staff Attendance & Payroll
 
 A geofenced clock-in/out app with payroll, built as static files (no
-build step, no server framework) that talk to a Google Sheet through a
-small Apps Script backend. See `CHANGES.md` for exactly what changed in
-this rebuild vs. the original single-file version, and
-`google-apps-script/README-google-sheets.md` for detailed Sheets setup.
+build step, no server framework) on Firebase (Realtime Database +
+Authentication, free Spark plan). See `CHANGES.md` for every change
+since the original single-file version.
 
 ## How it's organized
 
@@ -20,17 +19,18 @@ styles/                  tokens.css, base.css, components.css, views.css
 js/
   app.js                 bootstrap: wires storage, render, events, boot sequence
   core/                  state store, default config
-  storage/                storage-local.js, storage-gsheets.js (plain scripts,
-                          set window.storage — swap one for the other in
-                          index.html), storage-api.js (the module the app uses)
+  storage/                storage-firebase.js (Firebase data + sign-in, sets
+                          window.storage / window.storageAuth), storage-api.js
+                          (the module the app uses)
   domain/                 business logic: auth, geofence, attendance,
-                          payroll, roster, org settings, excel export
+                          payroll, roster, leave, org settings, excel export,
+                          WhatsApp report text
   ui/                     render dispatcher, views (one file per screen),
                           small shared components
   events/                 click/change delegation -> domain functions
-google-apps-script/
-  Code.gs                 the backend (paste into Apps Script)
-  README-google-sheets.md detailed Sheets setup walkthrough
+firebase/
+  database.rules.json     who may read/write what (deployed to Firebase)
+  migrate-security.js     one-off v17 account migration (already run)
 CHANGES.md                every behavior difference from the original, called out explicitly
 ```
 
@@ -63,10 +63,10 @@ python3 -m http.server 8080
 ```
 
 `index.html` loads the live Firebase backend, so a local copy talks to
-the real workplace data. To try things out without touching it, swap the
-storage `<script>` line in `index.html` to `js/storage/storage-local.js`
-(per-device localStorage) — first run then takes you through workplace
-setup.
+the real workplace data. To try things out without touching it, run the
+Firebase Local Emulator Suite (`npx firebase-tools emulators:start --only
+database,auth`) and open `http://localhost:8080/index.html?emulator=1` —
+first run then takes you through workplace setup.
 
 ## Backend: Firebase (current)
 
@@ -83,15 +83,10 @@ free **Spark** plan.
   `npx firebase-tools deploy --only database` from this folder.
 - Web config: top of `js/storage/storage-firebase.js` (public by design —
   the rules and sign-in are what protect the data).
-- History: `firebase/migrate-from-sheets.js` moved the data off Google
-  Sheets; `firebase/migrate-security.js` moved accounts to Firebase
+- History: the data moved off Google Sheets / Apps Script in v15 (the
+  migration script and the old Sheets code are in git history, removed in
+  v19); `firebase/migrate-security.js` moved accounts to Firebase
   Authentication (v17). Both are one-off.
-
-## Previous backend: Google Sheets (retired)
-
-The Sheet is kept as a read-only historical copy (passwords removed). The
-Sheets/local adapters in `js/storage/` predate sign-in through Firebase
-Authentication and can't be swapped back in without reworking sign-in.
 
 ## Deploying the frontend
 
@@ -171,19 +166,10 @@ Records.
   permission was denied (check the browser/site settings) or the page
   isn't served over https — geolocation is blocked on plain http except on
   `localhost`.
-- **"WEB_APP_URL is not set in js/storage/storage-gsheets.js".** You swapped
-  in the Sheets adapter but didn't paste your deployment URL in.
-- **"Unexpected reply from the Sheet. Is the web app deployed to Anyone?"**
-  Usually means the Apps Script deployment's "Who has access" isn't set to
-  Anyone — Google is returning a sign-in page instead of JSON. Redeploy
-  with that setting.
-- **"Wrong token"** — `SECRET` in `Code.gs` doesn't match `SECRET` in
-  `js/storage/storage-gsheets.js`. They must be identical strings.
-- **"Busy, try again"** — two requests hit the Apps Script lock at once;
-  it's transient, the offline queue will retry automatically.
-- **Changes not showing on other devices.** Check `POLL_SECONDS` in
-  `storage-gsheets.js` (default 60s) — other devices only pick up changes
-  on that interval, on regaining focus, or via the Refresh button.
+- **"User ID or password is incorrect" for someone who's sure of it.**
+  Give them a new temporary password: Admin → People → Edit.
+- **"That account is no longer active."** They've been turned off in
+  Admin → People (tap "Restore").
 - **An installed/PWA copy is stuck on the old version.** Bump `CACHE` in
   `sw.js` and redeploy; the service worker is network-first for same-origin
   requests but the app shell can still lag one load behind on flaky
@@ -222,9 +208,5 @@ What's still worth knowing:
   For a forgotten password, Authentication → Users → their account →
   Reset password isn't usable (the email is fake); instead add a new
   admin the same way with a freshly created account.
-- The old Google Apps Script endpoint and its `SECRET` still exist. After
-  migration the Sheet holds no passwords, but it does hold old attendance
-  history; to close it entirely, archive the Apps Script deployment (Apps
-  Script → Deploy → Manage deployments → Archive).
 - The `kv-backup-*.json` file the migration writes contains the old
   plaintext passwords. Keep it private, and delete it once you're happy.

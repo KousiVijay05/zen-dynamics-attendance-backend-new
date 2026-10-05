@@ -30,7 +30,9 @@ import {
   addShift, updateShift, deleteShift, startEditShift, cancelEditShift
 } from "../domain/org.js";
 import { exportExcel } from "../domain/excel.js";
-import { requestLeave, cancelLeave, decideLeave } from "../domain/leave.js";
+import { requestLeave, cancelLeave, decideLeave, allLeaves } from "../domain/leave.js";
+import { dailyReport, weeklyReport, monthlyReport, leaveMessage } from "../domain/reports.js";
+import { shareWhatsApp } from "../utils/whatsapp.js";
 
 export function initEvents() {
   var root = $("root");
@@ -209,7 +211,7 @@ tasks: selectedTasks
         addStaff({
           name: $("n_name").value, username: $("n_user").value, password: $("n_pass").value,
           salary: $("n_sal").value, admin: $("n_admin").checked
-        }).then(function (msg) { sayAndPaint(msg, true); }).catch(function (err) { say(err.message); });
+        }).then(function (msg) { sayAndPaint(msg, true); loadAdminData(); }).catch(function (err) { say(err.message); });
       } catch (err) { say(err.message); }
       return;
     }
@@ -260,6 +262,20 @@ tasks: selectedTasks
       decideLeave(id, act === "leaveapprove", state.me.name)
         .then(function (msg) { sayAndPaint(msg, true); })
         .catch(function (err) { say(err.message); });
+      return;
+    }
+
+    /* WhatsApp shares: build the text and open WhatsApp synchronously,
+       inside this tap, so the browser doesn't block the new window. */
+    if (act === "wa-daily" || act === "wa-weekly" || act === "wa-monthly") {
+      if (!state.adminLoaded) { say("Still loading everyone's records — try again in a moment."); return; }
+      shareWhatsApp(act === "wa-daily" ? dailyReport(dayKey(Date.now()))
+        : act === "wa-weekly" ? weeklyReport() : monthlyReport(state.month));
+      return;
+    }
+    if (act === "wa-leave") {
+      var lv = allLeaves().filter(function (x) { return x.id === id; })[0];
+      if (lv) shareWhatsApp(leaveMessage(lv));
       return;
     }
 

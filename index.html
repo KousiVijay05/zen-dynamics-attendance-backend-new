@@ -16,10 +16,10 @@
   <!-- ?v= busts GitHub Pages' Cache-Control: max-age=600 on a fresh page
        load, so a hard refresh doesn't need to wait out a 10-minute-old
        cached copy. Bump this alongside sw.js's CACHE constant. -->
-  <link rel="stylesheet" href="styles/tokens.css?v=13" />
-  <link rel="stylesheet" href="styles/base.css?v=13" />
-  <link rel="stylesheet" href="styles/components.css?v=13" />
-  <link rel="stylesheet" href="styles/views.css?v=13" />
+  <link rel="stylesheet" href="styles/tokens.css?v=14" />
+  <link rel="stylesheet" href="styles/base.css?v=14" />
+  <link rel="stylesheet" href="styles/components.css?v=14" />
+  <link rel="stylesheet" href="styles/views.css?v=14" />
 
   <!-- There's no bundler (by design — see README), so js/app.js and everything
        it imports would otherwise load as a sequential discovery chain: the
@@ -44,6 +44,8 @@
   <link rel="modulepreload" href="js/domain/leave.js" />
   <link rel="modulepreload" href="js/domain/org.js" />
   <link rel="modulepreload" href="js/domain/payroll.js" />
+  <link rel="modulepreload" href="js/domain/reports.js" />
+  <link rel="modulepreload" href="js/utils/whatsapp.js" />
   <link rel="modulepreload" href="js/domain/roster.js" />
   <link rel="modulepreload" href="js/events/handlers.js" />
   <link rel="modulepreload" href="js/storage/storage-api.js" />

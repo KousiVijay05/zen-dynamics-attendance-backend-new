@@ -24,6 +24,11 @@ export function tabRecords() {
       '</select></div>' +
     '</div>';
 
+  html += '<div class="btnrow">' +
+      '<button class="btn wa" data-act="wa-weekly">Weekly report</button>' +
+      '<button class="btn wa" data-act="wa-monthly">' + esc(monthLabel(ym)) + ' report</button>' +
+    '</div><p class="note">Opens WhatsApp with the report ready — pick your group and send.</p>';
+
   var byDay = {}, days = [];
 
   state.roster.forEach(function (p) {

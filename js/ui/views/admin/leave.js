@@ -9,6 +9,10 @@ function nameFor(id) {
   return p ? p.name : "Former staff";
 }
 
+function waBtn(l) {
+  return '<button class="btn wa small" data-act="wa-leave" data-id="' + l.id + '" title="Share on WhatsApp">WhatsApp</button>';
+}
+
 function statusTag(status) {
   if (status === "approved") return '<span class="tag on">approved</span>';
   if (status === "rejected") return '<span class="tag">rejected</span>';
@@ -26,6 +30,7 @@ function row(l, showActions) {
         (l.reason ? ' · ' + esc(l.reason) : '') +
       '</span>' +
     '</span>' +
+    '<span>' + waBtn(l) + '</span>' +
     (showActions
       ? '<span>' +
           '<button class="btn quiet small" data-act="leaveapprove" data-id="' + l.id + '">Approve</button> ' +

@@ -399,9 +399,12 @@ export function vStaff() {
               '</span>' +
               (l.reason ? '<br><span class="meta">' + esc(l.reason) + '</span>' : '') +
             '</span>' +
-            (l.status === "pending"
-              ? '<button class="btn quiet small" data-act="leavecancel" data-id="' + l.id + '">Cancel</button>'
-              : '<span class="dur">' + l.days + 'd</span>') +
+            '<span>' +
+              '<button class="btn wa small" data-act="wa-leave" data-id="' + l.id + '" title="Share on WhatsApp">WhatsApp</button> ' +
+              (l.status === "pending"
+                ? '<button class="btn quiet small" data-act="leavecancel" data-id="' + l.id + '">Cancel</button>'
+                : '<span class="dur">' + l.days + 'd</span>') +
+            '</span>' +
           '</div>';
         }).join('') +
       '</div>';

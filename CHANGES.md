@@ -606,3 +606,23 @@ way an attacker would try them — including a stranger with their own
 self-made account — plus the UI flows), 9 tests on a copy of the live
 data after migration (real passwords replaced with test values), the 12
 live-update/lateness tests and 14 unit tests re-run. All passing.
+
+## 2026-10-05 — WhatsApp share buttons (v18)
+
+One tap writes a ready-to-send WhatsApp message; you pick the group and
+press send. (Posting to a WhatsApp *group* automatically isn't possible
+with WhatsApp's official API, and unofficial bots risk the number being
+banned — so the app prepares the message and a person sends it.)
+
+- **Admin → On site → "Share today on WhatsApp"**: who's in (in/out
+  times, hours, late flag), who's on leave, who isn't in.
+- **Admin → Records → "Weekly report" / "<month> report"**: per person
+  days worked, hours, late marks, leave days, absences; team total.
+  Weekly = the last 7 days; monthly = the month picked in Records.
+- **Leave**: a WhatsApp button on every request — staff can announce
+  their own request; admins can share the request or the decision.
+
+Late/absent use the same rules as payroll and Records. New code:
+`js/domain/reports.js` (text), `js/utils/whatsapp.js` (opens WhatsApp).
+Tested: 10 new end-to-end tests on the emulators; security (73),
+live-update (12) and unit (14) suites re-run. All passing.

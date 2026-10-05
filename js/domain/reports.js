@@ -1,0 +1,145 @@
+/* ---------------------------------------------------------------
+   WhatsApp-ready text reports: daily attendance, weekly / monthly
+   summaries, leave notices. Plain text with WhatsApp's own formatting
+   (*bold*), built from data already loaded in state — the admin taps
+   a Share button, picks the group, and sends (js/utils/whatsapp.js).
+
+   Lateness uses the same rule as payroll.js / Records: the first punch
+   of the day against its own shift start (or the global Payroll Rules
+   start when it had none), plus the grace minutes. Absence uses
+   payroll's weekly-off days and the person's joining date.
+----------------------------------------------------------------*/
+
+import { state } from "../core/store.js";
+import { dayKey, hm, minsOfDay, parseHM, monthLabel } from "../utils/format.js";
+import { monthDays } from "./payroll.js";
+import { isOnApprovedLeave } from "./leave.js";
+
+var DAY_MS = 864e5;
+
+function org() { return (state.cfg && state.cfg.org) || "Attendance"; }
+function active() {
+  return state.roster.filter(function (p) { return p.active !== false; })
+    .sort(function (a, b) { return a.name.localeCompare(b.name); });
+}
+
+/** ts -> "9:05 AM" */
+export function t12(ts) {
+  var d = new Date(ts), h = d.getHours(), m = d.getMinutes();
+  return ((h % 12) || 12) + ":" + (m < 10 ? "0" : "") + m + " " + (h < 12 ? "AM" : "PM");
+}
+/* Dates spelled out by hand: browser locales disagree ("Sept", stray commas). */
+var MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+var WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+function dm(k) { var d = new Date(k + "T00:00:00"); return d.getDate() + " " + MON[d.getMonth()]; }
+/** "yyyy-mm-dd" -> "Mon 5 Oct 2026" */
+function dLabel(k) { return WD[new Date(k + "T00:00:00").getDay()] + " " + dm(k) + " " + k.slice(0, 4); }
+/** -> "29 Sep – 5 Oct 2026" */
+function rangeLabel(from, to) {
+  if (from === to) return dm(from) + " " + from.slice(0, 4);
+  return dm(from) + (from.slice(0, 4) !== to.slice(0, 4) ? " " + from.slice(0, 4) : "") + " – " + dm(to) + " " + to.slice(0, 4);
+}
+function keyPlus(k, days) { return dayKey(new Date(k + "T12:00:00").getTime() + days * DAY_MS); }
+function isWeeklyOff(k) { return state.cfg.pay.weeklyOff.indexOf(new Date(k + "T00:00:00").getDay()) >= 0; }
+
+/** One person's punches on one day -> { first, last, open, ms, late } or null. */
+export function dayInfo(p, k) {
+  var list = (state.logs["log:" + p.id + ":" + k.slice(0, 4) + k.slice(5, 7)] || [])
+    .filter(function (e) { return dayKey(e.start) === k; })
+    .sort(function (a, b) { return a.start - b.start; });
+  if (!list.length) return null;
+  var r = { first: list[0].start, last: null, open: false, ms: 0 };
+  list.forEach(function (e) {
+    if (e.end) { r.ms += e.end - e.start; if (!r.last || e.end > r.last) r.last = e.end; }
+    else { r.open = true; r.ms += Math.max(0, Date.now() - e.start); }
+  });
+  var P = state.cfg.pay;
+  var start = list[0].shiftStart ? parseHM(list[0].shiftStart) : parseHM(P.shiftStart);
+  r.late = minsOfDay(r.first) > start + P.lateGrace;
+  return r;
+}
+
+/** Daily attendance for day `k` ("yyyy-mm-dd"). */
+export function dailyReport(k) {
+  var present = [], leave = [], notIn = [];
+  active().forEach(function (p) {
+    var d = dayInfo(p, k);
+    if (d) present.push({ p: p, d: d });
+    else if (isOnApprovedLeave(p.id, k)) leave.push(p);
+    else if (!(p.joined && k < p.joined)) notIn.push(p);
+  });
+  present.sort(function (a, b) { return a.d.first - b.d.first; });
+
+  var out = ["📋 *" + org() + " — Daily attendance*", dLabel(k) + (isWeeklyOff(k) ? " (weekly off)" : ""), ""];
+  out.push("✅ *Present (" + present.length + ")*");
+  if (!present.length) out.push("—");
+  present.forEach(function (x) {
+    out.push("• *" + x.p.name + "* — In " + t12(x.d.first) + (x.d.late ? " ⏰ late" : "") +
+      (x.d.open ? " · still in" : " · Out " + t12(x.d.last)) + " · " + hm(x.d.ms));
+  });
+  if (leave.length) {
+    out.push("", "🌴 *On leave (" + leave.length + ")*");
+    leave.forEach(function (p) { out.push("• " + p.name); });
+  }
+  if (notIn.length) {
+    out.push("", (isWeeklyOff(k) ? "🏖 *Off today (" : "❌ *Not in (") + notIn.length + ")*");
+    notIn.forEach(function (p) { out.push("• " + p.name); });
+  }
+  return out.join("\n");
+}
+
+/** Per-person totals over [from, to] (inclusive, "yyyy-mm-dd"). Days after today are ignored. */
+export function periodStats(p, from, to) {
+  var today = dayKey(Date.now());
+  var s = { days: 0, ms: 0, late: 0, leave: 0, absent: 0 };
+  for (var k = from; k <= to && k <= today; k = keyPlus(k, 1)) {
+    if (p.joined && k < p.joined) continue;
+    var d = dayInfo(p, k);
+    if (d) { s.days++; s.ms += d.ms; if (d.late && !isWeeklyOff(k)) s.late++; continue; }
+    if (isWeeklyOff(k)) continue;
+    if (isOnApprovedLeave(p.id, k)) s.leave++;
+    else if (k < today) s.absent++;              // today isn't over yet
+  }
+  return s;
+}
+
+function periodReport(title, from, to) {
+  var out = ["📊 *" + org() + " — " + title + "*", rangeLabel(from, to), ""];
+  var team = { days: 0, ms: 0 };
+  active().forEach(function (p) {
+    var s = periodStats(p, from, to);
+    team.days += s.days; team.ms += s.ms;
+    out.push("👤 *" + p.name + "*");
+    out.push("   ✅ " + s.days + " day" + (s.days === 1 ? "" : "s") + " · ⏱ " + hm(s.ms) +
+      " · ⏰ late " + s.late + " · 🌴 leave " + s.leave + " · ❌ absent " + s.absent);
+  });
+  out.push("", "Team total: " + team.days + " days worked · " + hm(team.ms));
+  return out.join("\n");
+}
+
+/** The last 7 days, ending today. */
+export function weeklyReport() {
+  var to = dayKey(Date.now());
+  return periodReport("Weekly report", keyPlus(to, -6), to);
+}
+
+/** Calendar month `ym` ("yyyy-mm"), up to today if it's the current month. */
+export function monthlyReport(ym) {
+  var from = ym + "-01", end = ym + "-" + monthDays(ym), today = dayKey(Date.now());
+  var to = end < today ? end : today;
+  return periodReport("Monthly report, " + monthLabel(ym) + (end > today ? " (so far)" : ""), from, to < from ? from : to);
+}
+
+/** A leave request or decision, as a notice. `l` comes from leave.js allLeaves(). */
+export function leaveMessage(l) {
+  var p = state.roster.filter(function (x) { return x.id === l.staffId; })[0] || state.me || {};
+  var when = rangeLabel(l.from, l.to) + " (" + l.days + " day" + (l.days === 1 ? "" : "s") + ")";
+  var head = l.status === "approved" ? "✅ *Leave approved*"
+    : l.status === "rejected" ? "❌ *Leave not approved*"
+    : "🗓️ *Leave request*";
+  var out = [head, "*" + (p.name || "Staff") + "* — " + when];
+  if (l.reason) out.push("Reason: " + l.reason);
+  if (l.status === "pending") out.push("Status: ⏳ waiting for approval");
+  else if (l.decidedBy) out.push((l.status === "approved" ? "Approved" : "Decided") + " by " + l.decidedBy);
+  return out.join("\n");
+}

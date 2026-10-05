@@ -26,6 +26,7 @@ export function tabOnsite() {
         return '<div class="row"><span class="who">' + esc(p.name) + '</span><span class="meta">' + (t ? hm(t) + " today" : "—") + "</span></div>";
       }).join("") + "</div>"
     : '<div class="rows"><div class="empty">Everyone is on site.</div></div>');
+  html += '<div class="btnrow"><button class="btn wa" data-act="wa-daily">Share today on WhatsApp</button></div>';
   html += '<div class="btnrow"><button class="btn quiet" data-act="refresh">Refresh</button></div>';
   return html;
 }

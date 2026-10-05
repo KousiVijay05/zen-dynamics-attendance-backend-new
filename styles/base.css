@@ -28,7 +28,9 @@ body { margin: 0; }
 .bar .nm { font-size: 16px; font-weight: 650; line-height: 1.2; letter-spacing: -.2px; color: var(--paper); }
 .bar .sub { font-size: 12px; color: var(--gold); font-variant-numeric: tabular-nums; font-weight: 600; }
 .bar .acts { display: flex; gap: 6px; flex: 0 0 auto; }
-.bar .btn.quiet { border-color: rgba(247, 246, 242, .35); color: var(--paper); }
+.bar .btn.wa { background: #1fa855; border-color: #1fa855; color: #fff; font-weight: 700; }
+.btn.wa:active:not(:disabled) { background: #178a45; border-color: #178a45; }
+.btn.quiet { border-color: rgba(247, 246, 242, .35); color: var(--paper); }
 .bar .btn.quiet:active:not(:disabled) { background: rgba(247, 246, 242, .12); }
 
 button { touch-action: manipulation; }

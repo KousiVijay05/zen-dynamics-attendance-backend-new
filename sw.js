@@ -1,20 +1,20 @@
 /* Bump CACHE whenever you change any app file, otherwise phones keep
-   serving the old version. v17: Firebase Authentication + per-user database
+   serving the old version. v18: WhatsApp share buttons. v17: Firebase Authentication + per-user database
    rules. v16: per-shift lateness + live admin screens. v15: backend moved from
    Google Apps Script to Firebase Realtime Database (see CHANGES.md). */
-const CACHE = "attendance-v17";
+const CACHE = "attendance-v18";
 const ASSETS = [
   "./", "./index.html", "./manifest.json",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/mark.png", "./icons/logo-lockup.png",
 
-  "./styles/tokens.css?v=13", "./styles/base.css?v=13",
-  "./styles/components.css?v=13", "./styles/views.css?v=13",
+  "./styles/tokens.css?v=14", "./styles/base.css?v=14",
+  "./styles/components.css?v=14", "./styles/views.css?v=14",
 
   "./js/app.js",
   "./js/core/config.js", "./js/core/store.js",
   "./js/domain/attendance.js", "./js/domain/auth.js", "./js/domain/excel.js",
   "./js/domain/geofence.js", "./js/domain/leave.js", "./js/domain/org.js",
-  "./js/domain/payroll.js", "./js/domain/roster.js",
+  "./js/domain/payroll.js", "./js/domain/reports.js", "./js/domain/roster.js",
   "./js/events/handlers.js",
   "./js/storage/storage-api.js", "./js/storage/storage-firebase.js",
   "./js/storage/storage-gsheets.js", "./js/storage/storage-local.js",
@@ -26,7 +26,7 @@ const ASSETS = [
   "./js/ui/views/admin/settings.js", "./js/ui/views/admin/shifts.js",
   "./js/ui/views/changepw.js", "./js/ui/views/setup.js",
   "./js/ui/views/signin.js", "./js/ui/views/staff.js",
-  "./js/utils/format.js", "./js/utils/geomath.js"
+  "./js/utils/format.js", "./js/utils/geomath.js", "./js/utils/whatsapp.js"
 ];
 
 /* Firebase SDK, loaded cross-origin by js/storage/storage-firebase.js.

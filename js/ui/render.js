@@ -30,6 +30,12 @@ export function render() {
     html = errorScreen(err);
   }
   root.innerHTML = html;
+  /* Re-rendering resets the pill tab row's sideways scroll; bring the
+     selected tab back into view so it never hides off the edge. */
+  var sel = root.querySelector(".tabs:not(.seg) .tab.sel");
+  if (sel && sel.parentNode.scrollWidth > sel.parentNode.clientWidth) {
+    sel.parentNode.scrollLeft = Math.max(0, sel.offsetLeft - sel.parentNode.clientWidth / 2 + sel.offsetWidth / 2);
+  }
 }
 
 function view() {

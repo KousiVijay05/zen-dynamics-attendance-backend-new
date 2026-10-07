@@ -11,15 +11,18 @@
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
   <!-- ?v= busts GitHub Pages' Cache-Control: max-age=600 on a fresh page
        load, so a hard refresh doesn't need to wait out a 10-minute-old
        cached copy. Bump this alongside sw.js's CACHE constant. -->
-  <link rel="stylesheet" href="styles/tokens.css?v=14" />
-  <link rel="stylesheet" href="styles/base.css?v=14" />
-  <link rel="stylesheet" href="styles/components.css?v=14" />
-  <link rel="stylesheet" href="styles/views.css?v=14" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" />
+  <link rel="stylesheet" href="styles/tokens.css?v=15" />
+  <link rel="stylesheet" href="styles/base.css?v=15" />
+  <link rel="stylesheet" href="styles/components.css?v=15" />
+  <link rel="stylesheet" href="styles/views.css?v=15" />
 
   <!-- There's no bundler (by design — see README), so js/app.js and everything
        it imports would otherwise load as a sequential discovery chain: the
@@ -52,6 +55,7 @@
   <link rel="modulepreload" href="js/ui/notify.js" />
   <link rel="modulepreload" href="js/ui/render.js" />
   <link rel="modulepreload" href="js/ui/components/brand.js" />
+  <link rel="modulepreload" href="js/ui/components/icons.js" />
   <link rel="modulepreload" href="js/ui/components/monthOptions.js" />
   <link rel="modulepreload" href="js/ui/components/proximity.js" />
   <link rel="modulepreload" href="js/ui/components/syncStatus.js" />

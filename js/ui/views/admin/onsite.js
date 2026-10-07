@@ -1,7 +1,8 @@
-/* "On site" tab: who's currently clocked in, who isn't. Ported verbatim from tabOnsite() in the original app.js. */
+/* "On site" tab: who's clocked in right now, who isn't. */
 import { state } from "../../../core/store.js";
 import { esc, hm, tClock } from "../../../utils/format.js";
 import { openEntryFor, todayTotalFor } from "../../../domain/attendance.js";
+import { icons, avatar } from "../../components/icons.js";
 
 export function tabOnsite() {
   var inNow = [], off = [];
@@ -9,24 +10,33 @@ export function tabOnsite() {
     var o = openEntryFor(p.id);
     if (o) inNow.push({ p: p, e: o.entry }); else off.push(p);
   });
-  var html = '<div class="stat"><span class="k">On site right now</span><span class="v">' + inNow.length + " / " + (inNow.length + off.length) + "</span></div>";
+  var total = inNow.length + off.length;
+  var pct = total ? Math.round(inNow.length / total * 100) : 0;
+
+  var html = '<div class="hero-stat"><span class="k">On site right now</span>' +
+    '<span class="v">' + inNow.length + "<small> / " + total + " staff</small></span>" +
+    '<div class="meter"><i style="width:' + pct + '%"></i></div></div>';
+
   html += "<h2>Clocked in</h2>";
   if (!inNow.length) html += '<div class="rows"><div class="empty">Nobody is clocked in.</div></div>';
   else {
     html += '<div class="rows">';
     inNow.sort(function (a, b) { return a.e.start - b.e.start; }).forEach(function (r) {
-      html += '<div class="row"><span><span class="who">' + esc(r.p.name) + '</span><br><span class="meta">Since ' + tClock(r.e.start) +
-        "</span></span><span class=\"dur\">" + hm(Date.now() - r.e.start) + "</span></div>";
+      html += '<div class="row"><span class="person-cell">' + avatar(r.p.name, "in") +
+        '<span><span class="who">' + esc(r.p.name) + '</span><br><span class="meta">Since ' + tClock(r.e.start) +
+        (r.e.shiftName ? " · " + esc(r.e.shiftName) : "") + "</span></span></span>" +
+        '<span class="dur">' + hm(Date.now() - r.e.start) + "</span></div>";
     });
     html += "</div>";
   }
   html += "<h2>Not clocked in</h2>" + (off.length
     ? '<div class="rows">' + off.map(function (p) {
         var t = todayTotalFor(p.id);
-        return '<div class="row"><span class="who">' + esc(p.name) + '</span><span class="meta">' + (t ? hm(t) + " today" : "—") + "</span></div>";
+        return '<div class="row"><span class="person-cell">' + avatar(p.name, "dim") +
+          '<span class="who">' + esc(p.name) + '</span></span><span class="meta">' + (t ? hm(t) + " today" : "—") + "</span></div>";
       }).join("") + "</div>"
     : '<div class="rows"><div class="empty">Everyone is on site.</div></div>');
-  html += '<div class="btnrow"><button class="btn wa" data-act="wa-daily">Share today on WhatsApp</button></div>';
-  html += '<div class="btnrow"><button class="btn quiet" data-act="refresh">Refresh</button></div>';
+  html += '<div class="btnrow"><button class="btn wa wide" data-act="wa-daily">' + icons.whatsapp + "Share today on WhatsApp</button></div>";
+  html += '<div class="btnrow"><button class="btn quiet wide" data-act="refresh">' + icons.refresh + "Refresh</button></div>";
   return html;
 }

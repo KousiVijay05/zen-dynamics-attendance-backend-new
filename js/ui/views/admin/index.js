@@ -9,14 +9,15 @@ import { tabSite } from "./settings.js";
 import { tabShifts } from "./shifts.js";
 import { tabLeaveAdmin } from "./leave.js";
 import { brandMark } from "../../components/brand.js";
+import { icons } from "../../components/icons.js";
 
 var TABS = ["onsite:On site", "people:People", "shifts:Shifts", "leave:Leave", "records:Records", "payroll:Payroll", "site:Settings"];
 
 export function vAdmin() {
   var head = '<div class="bar"><div class="idn">' + brandMark() + '<div><div class="nm">' + esc(state.cfg.org) + "</div>" +
-    '<div class="sub">Administration · ' + esc(state.me.name) + "</div></div></div>" +
-    '<div class="acts"><button class="btn quiet small" data-act="gostaff">My clock</button></div></div>' +
-    '<div class="tabs">' + TABS.map(function (t) {
+    '<div class="sub">Admin · ' + esc(state.me.name) + "</div></div></div>" +
+    '<div class="acts"><button class="btn quiet small" data-act="gostaff">' + icons.clock + 'My clock</button></div></div>' +
+    '<div class="tabs" role="tablist">' + TABS.map(function (t) {
       var p = t.split(":");
       return '<button class="tab' + (state.tab === p[0] ? " sel" : "") + '" data-act="tab" data-v="' + p[0] + '">' + p[1] + "</button>";
     }).join("") + "</div>";

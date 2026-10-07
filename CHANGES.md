@@ -635,3 +635,28 @@ per-device test adapter (`storage-local.js`), and the one-off
 `migrate-from-sheets.js` — about 500 lines. All remain in git history.
 No behaviour change; security, WhatsApp and live-update test suites re-run,
 all passing.
+
+## 2026-10-07 — Redesigned look (v20)
+
+A full visual refresh in the Zen & Dynamics black, ivory and gold:
+Plus Jakarta Sans typeface with tabular figures (times line up), card-based
+sections, softer shadows, a rounded black header with a gold glow.
+
+- **Sign-in / first password / setup**: a dark welcome panel with the logo
+  and a floating card; "outside the site" is now a calm card, not a red block.
+- **Staff home**: fixed a layout bug that wrapped the whole page (month
+  stats, past shifts, leave) inside the black timer card. Now: a hero card
+  with an "On shift" badge, the live timer and a big Clock in/out button,
+  then month tiles, recent shifts, and a leave card with a balance bar.
+- **Admin**: pill tabs that scroll sideways (the selected one stays in
+  view), an "on site now" summary with a progress bar, initials avatars
+  with a green dot for who's in, pending leave with Approve/Reject on their
+  own line, payroll rules and settings grouped into cards, People → Edit
+  reordered (details, schedule, password).
+- WhatsApp buttons are now properly green with the WhatsApp icon (a CSS
+  slip had left them plain outside the header).
+- Times show as 12-hour ("5:47 AM") everywhere; dates as "29 Sep".
+- Dark mode follows the phone's setting.
+
+No behaviour changes; every button and field works as before. All test
+suites re-run and passing.

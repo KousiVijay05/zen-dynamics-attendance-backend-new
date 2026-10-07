@@ -30,8 +30,10 @@ export function hm(ms) {
   return (h ? h + "h " : "") + (m % 60) + "m";
 }
 
+/** ts -> "5:47 AM" (always 12-hour, whatever the phone's locale) */
 export function tClock(ts) {
-  return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  var d = new Date(ts), h = d.getHours(), m = d.getMinutes();
+  return ((h % 12) || 12) + ":" + (m < 10 ? "0" : "") + m + " " + (h < 12 ? "AM" : "PM");
 }
 
 /** local calendar-day key: "yyyy-mm-dd" */
@@ -55,7 +57,7 @@ export function ymKey(ts) {
 export function dayLabel(k) {
   if (k === dayKey(Date.now())) return "Today";
   if (k === dayKey(Date.now() - 864e5)) return "Yesterday";
-  return new Date(k + "T00:00:00").toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+  return DAYS[new Date(k + "T00:00:00").getDay()] + " " + shortDate(k);
 }
 
 export function monthLabel(ym) {
@@ -83,3 +85,7 @@ export function hm12(s) {
 }
 
 export var DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+var MONTHS3 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "yyyy-mm-dd" -> "29 Sep" (spelled out by hand: locales vary, e.g. "Sept") */
+export function shortDate(k) { var d = new Date(k + "T00:00:00"); return d.getDate() + " " + MONTHS3[d.getMonth()]; }

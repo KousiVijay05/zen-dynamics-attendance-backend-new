@@ -1,25 +1,52 @@
-/* View-level touches that don't belong in base or components. */
+/* Screen-level layouts: sign-in, sync banner, splash. */
 
-/* Sync status is a real-time state, not branding — green while healthy/catching
-   up, red once actually offline. */
+/* ---------- sign-in / change-password hero ---------- */
+.sign-hero {
+  position: relative; overflow: hidden; text-align: center;
+  margin: 0 -16px; padding: calc(44px + var(--safe-t)) 24px 76px;
+  background:
+    radial-gradient(80% 90% at 50% 0%, rgba(210, 170, 85, .30) 0%, rgba(210, 170, 85, 0) 65%),
+    linear-gradient(180deg, var(--hero-2) 0%, var(--hero) 100%);
+  color: var(--hero-ink);
+  border-radius: 0 0 36px 36px;
+}
+.sign-hero img {
+  width: 76px; height: 76px; border-radius: 22px; display: block; margin: 0 auto 18px;
+  box-shadow: 0 0 0 1px rgba(210, 170, 85, .4), 0 18px 36px -14px rgba(0, 0, 0, .8);
+}
+.sign-hero .org { font-size: 24px; font-weight: 800; letter-spacing: -.02em; }
+.sign-hero .date { font-size: 13.5px; color: var(--gold); font-weight: 650; margin-top: 4px; }
+.sign-card {
+  position: relative; margin: -48px 4px 0; padding: 24px 20px 20px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md); animation: rise .4s var(--ease) both;
+}
+.sign-card h1 { font-size: 22px; margin: 0; }
+.sign-card .lede { font-size: 14px; margin-top: 4px; }
+.sign-card .btnrow { margin-top: 22px; }
+.sign-card .btn.go { min-height: 54px; font-size: 16px; border-radius: var(--radius-lg); }
+.sign-card .msg:empty { min-height: 0; margin: 0; }
+.sign-below { margin-top: 14px; }
+.sign-foot { text-align: center; font-size: 12px; color: var(--ink3); margin-top: 28px; }
+.sign-foot svg { width: 13px; height: 13px; vertical-align: -2px; margin-right: 4px; color: var(--gold-strong); }
+
+/* ---------- sync status (live state, so status colours) ---------- */
 .syncbar {
-  font-size: 12.5px; font-weight: 600; text-align: center; padding: 8px 10px; margin-bottom: 12px;
-  border-radius: var(--radius-sm); background: var(--status-good-soft); color: var(--status-good);
+  font-size: 13px; font-weight: 650; text-align: center; padding: 9px 14px; margin: 12px 0;
+  border-radius: 999px; background: var(--status-good-soft); color: var(--status-good);
   animation: fade-in .2s var(--ease);
 }
 .syncbar.off { background: var(--status-bad-soft); color: var(--status-bad); }
 
-/* The very first thing painted, before app.js has run — see the #root markup
-   in index.html. Branded so the earliest thing anyone sees is the logo, not
-   plain gray text. */
-.splash { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 60vh; gap: 14px; text-align: center; }
-.splash img { width: 72px; height: 72px; border-radius: var(--radius-md); box-shadow: var(--shadow-md); }
-.splash span { color: var(--ink2); font-size: 14px; }
+/* ---------- first paint, before app.js runs ---------- */
+.splash { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 80vh; gap: 16px; text-align: center; }
+.splash img { width: 76px; height: 76px; border-radius: 22px; box-shadow: var(--shadow-lg); animation: breathe 1.8s var(--ease) infinite; }
+.splash span { color: var(--ink3); font-size: 14px; font-weight: 600; }
+@keyframes breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
 
-::selection { background: var(--gold-soft); color: var(--on-gold); }
+::selection { background: var(--gold-soft); color: var(--ink); }
 
-/* Larger, easier hit targets on touch devices specifically (mouse users keep the tighter defaults). */
 @media (pointer: coarse) {
-  .btn, .linkish, .tab { min-height: 44px; }
-  .key { min-height: 56px; }
+  .btn, .linkish { min-height: 46px; }
+  .btn.small { min-height: 38px; }
 }

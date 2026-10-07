@@ -1,81 +1,98 @@
 /* ---------------------------------------------------------------
-   Design tokens — Zen & Dynamics brand palette.
+   Design tokens — Zen & Dynamics.
 
-   Brand rule: black + white + gold, everywhere. --gold* is the ONLY
-   accent/CTA color in the app now. --status-good (green) and
-   --status-bad (warm red) are NOT brand colors — they're kept
-   strictly for real-time status meaning (inside/outside the
-   geofence, an open "on shift" indicator, a success message) per
-   the explicit exception for temporary status indicators. Nothing
-   decorative (buttons, tabs, focus rings, borders, headers) should
-   ever reference --status-good/--status-bad — if you're tempted to,
-   reach for --gold instead.
+   Brand: black, warm ivory and gold. Gold (--gold*) is the only accent
+   and the only call-to-action colour. Green/red (--status-*) are NOT
+   decoration — they only ever mean live status: at the site or not, on
+   shift, a success or an error. WhatsApp green (--wa) is used only on
+   WhatsApp share buttons, where it's the recognisable cue.
 ----------------------------------------------------------------*/
 :root {
-  /* --- brand: black + white --- */
-  --paper: #FFFFFF;        /* page background */
-  --panel: #F7F6F2;        /* card background, a hair off white for depth */
-  --panel-raised: #FFFFFF; /* elevated surfaces (inputs, keys, person cards) */
-  --ink: #0A0A0A;          /* primary text / black brand element */
-  --ink2: #4A4A46;         /* secondary text */
-  --ink3: #8A8A85;         /* tertiary text */
-  --line: #E3E1D8;
-  --line2: #ECEAE3;
+  color-scheme: light;
 
-  /* --- brand: gold accent + CTAs --- */
-  --gold: #E7B657;
-  --gold-strong: #B8892E;  /* hover/active */
-  --gold-soft: #FBF0D9;    /* tinted chip/background */
-  --on-gold: #171204;      /* text/icon color when sitting on a gold fill */
+  /* surfaces */
+  --paper: #F5F2EB;          /* page: warm ivory */
+  --panel: #FFFFFF;          /* cards */
+  --panel-raised: #FFFFFF;   /* inputs and anything on a card */
+  --panel-2: #FAF8F3;        /* quiet fill inside cards (group headers) */
+  --ink: #15130F;            /* text, black brand element */
+  --ink2: #5E5A51;           /* secondary text */
+  --ink3: #9C978B;           /* tertiary text, captions */
+  --line: #E6E1D5;           /* borders */
+  --line2: #EFEBE2;          /* dividers inside cards */
 
-  /* --- status only (see file header) --- */
-  --status-good: #1F7A4C;
-  --status-good-soft: #DFF3E7;
-  --status-bad: #B23B2E;
-  --status-bad-soft: #F7E2DD;
+  /* the dark "hero" surfaces (header, live clock) */
+  --hero: #12110E;
+  --hero-2: #1F1C16;
+  --hero-ink: #F6F1E4;
+  --hero-ink2: rgba(246, 241, 228, .62);
+  --hero-line: rgba(246, 241, 228, .14);
 
-  --ring-idle: var(--ink);
+  /* gold */
+  --gold: #D2AA55;
+  --gold-strong: #A9832F;
+  --gold-soft: #F6EDD7;
+  --gold-grad: linear-gradient(135deg, #EDCD86 0%, #D6AC55 48%, #B88A35 100%);
+  --on-gold: #1C1506;
 
-  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
-  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  /* status only (see header) */
+  --status-good: #1C7A4D;
+  --status-good-soft: #E1F2E8;
+  --status-bad: #B5412D;
+  --status-bad-soft: #F8E5E0;
 
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
+  --wa: #1DA851;
+  --wa-strong: #168A42;
 
-  --shadow-sm: 0 1px 2px rgba(10, 10, 10, .07);
-  --shadow-md: 0 4px 14px rgba(10, 10, 10, .10);
-  --shadow-lg: 0 12px 32px rgba(10, 10, 10, .18);
+  --ring-idle: var(--ink3);
+
+  --sans: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --mono: var(--sans);   /* numbers use tabular figures, not a code font */
+
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 26px;
+
+  --shadow-sm: 0 1px 2px rgba(21, 19, 15, .05), 0 1px 1px rgba(21, 19, 15, .03);
+  --shadow-md: 0 10px 24px -12px rgba(21, 19, 15, .18), 0 2px 6px -2px rgba(21, 19, 15, .06);
+  --shadow-lg: 0 24px 48px -18px rgba(21, 19, 15, .45);
+  --shadow-gold: 0 10px 22px -10px rgba(169, 131, 47, .65);
 
   --ease: cubic-bezier(.2, .7, .3, 1);
   --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    /* Dark mode stays on-brand: black becomes the background (it's one of
-       the two brand neutrals, not a departure from it), gold stays gold. */
-    --paper: #0B0B0A;
-    --panel: #161613;
-    --panel-raised: #1E1E1A;
-    --ink: #F7F6F2;
-    --ink2: #C7C5BC;
-    --ink3: #8C8B84;
-    --line: #302F29;
-    --line2: #262620;
+    color-scheme: dark;
+    --paper: #0D0C0A;
+    --panel: #181713;
+    --panel-raised: #1F1D18;
+    --panel-2: #1C1A16;
+    --ink: #F4F0E6;
+    --ink2: #C3BEB1;
+    --ink3: #8E897D;
+    --line: #2E2B24;
+    --line2: #26241E;
 
-    --gold: #EFC170;
-    --gold-strong: #F4D28F;  /* lighter = "stronger" against a dark surface */
-    --gold-soft: #3A2E12;
-    --on-gold: #171204;
+    --hero: #050504;
+    --hero-2: #17150F;
 
-    --status-good: #4CB878;
-    --status-good-soft: #163A26;
-    --status-bad: #E0836A;
-    --status-bad-soft: #3B241C;
+    --gold: #E2BC68;
+    --gold-strong: #F0D08C;
+    --gold-soft: #33280F;
+    --on-gold: #1C1506;
 
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .35);
-    --shadow-md: 0 4px 14px rgba(0, 0, 0, .4);
-    --shadow-lg: 0 12px 32px rgba(0, 0, 0, .5);
+    --status-good: #52BD80;
+    --status-good-soft: #15321F;
+    --status-bad: #E58A72;
+    --status-bad-soft: #3A211A;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
+    --shadow-md: 0 10px 24px -12px rgba(0, 0, 0, .7);
+    --shadow-lg: 0 24px 48px -18px rgba(0, 0, 0, .8);
+    --shadow-gold: 0 10px 22px -12px rgba(226, 188, 104, .45);
   }
 }

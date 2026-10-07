@@ -1,14 +1,14 @@
 /* Bump CACHE whenever you change any app file, otherwise phones keep
-   serving the old version. v19: old Google Sheets code removed. v18: WhatsApp share buttons. v17: Firebase Authentication + per-user database
+   serving the old version. v20: redesigned look. v19: old Google Sheets code removed. v18: WhatsApp share buttons. v17: Firebase Authentication + per-user database
    rules. v16: per-shift lateness + live admin screens. v15: backend moved from
    Google Apps Script to Firebase Realtime Database (see CHANGES.md). */
-const CACHE = "attendance-v19";
+const CACHE = "attendance-v20";
 const ASSETS = [
   "./", "./index.html", "./manifest.json",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/mark.png", "./icons/logo-lockup.png",
 
-  "./styles/tokens.css?v=14", "./styles/base.css?v=14",
-  "./styles/components.css?v=14", "./styles/views.css?v=14",
+  "./styles/tokens.css?v=15", "./styles/base.css?v=15",
+  "./styles/components.css?v=15", "./styles/views.css?v=15",
 
   "./js/app.js",
   "./js/core/config.js", "./js/core/store.js",
@@ -18,7 +18,7 @@ const ASSETS = [
   "./js/events/handlers.js",
   "./js/storage/storage-api.js", "./js/storage/storage-firebase.js",
   "./js/ui/dom.js", "./js/ui/notify.js", "./js/ui/render.js",
-  "./js/ui/components/brand.js", "./js/ui/components/monthOptions.js",
+  "./js/ui/components/brand.js", "./js/ui/components/icons.js", "./js/ui/components/monthOptions.js",
   "./js/ui/components/proximity.js", "./js/ui/components/syncStatus.js",
   "./js/ui/views/admin/index.js", "./js/ui/views/admin/leave.js", "./js/ui/views/admin/onsite.js",
   "./js/ui/views/admin/payroll.js", "./js/ui/views/admin/people.js", "./js/ui/views/admin/records.js",
@@ -53,6 +53,15 @@ self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
   const url = new URL(e.request.url);
   if (url.origin === "https://www.gstatic.com" && url.pathname.indexOf("/firebasejs/") === 0) {
+    e.respondWith(caches.match(e.request).then(hit => hit || fetch(e.request).then(r => {
+      const copy = r.clone();
+      caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
+      return r;
+    })));
+    return;
+  }
+  /* The app's typeface (Google Fonts): cache-first so it survives offline. */
+  if (url.origin === "https://fonts.googleapis.com" || url.origin === "https://fonts.gstatic.com") {
     e.respondWith(caches.match(e.request).then(hit => hit || fetch(e.request).then(r => {
       const copy = r.clone();
       caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});

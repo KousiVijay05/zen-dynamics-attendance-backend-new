@@ -9,6 +9,7 @@ import { state, geo } from "../../core/store.js";
 import { esc } from "../../utils/format.js";
 import { bearing } from "../../utils/geomath.js";
 import { distanceNow } from "../../domain/geofence.js";
+import { icons } from "./icons.js";
 
 export function radarSvg(d) {
   var cx = 48, cy = 48, fill = "var(--ring-idle)";
@@ -48,7 +49,7 @@ export function lockedBlock(d, closed) {
   var cap = noFix ? (geo.err || "Waiting for a location fix.")
     : closed ? "Your shift was closed when you left."
     : "Return within " + state.cfg.site.radius + " m to clock in.";
-  return '<div class="clock locked"><div class="read">' + title + '</div><div class="cap">' + esc(cap) + "</div></div>" +
-    (noFix ? '<div class="btnrow"><button class="btn wide" data-act="retryloc">Enable location</button></div>' +
+  return '<div class="clock locked"><div class="lock-ico">' + (noFix ? icons.pin : icons.lock) + '</div><div class="read">' + title + '</div><div class="cap">' + esc(cap) + "</div></div>" +
+    (noFix ? '<div class="btnrow"><button class="btn go wide" data-act="retryloc">Enable location</button></div>' +
       '<p class="why">The app needs location to know you\'re on site. It must be served over https — a sandboxed preview or a file:// page will always be blocked.</p>' : "");
 }

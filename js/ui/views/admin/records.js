@@ -3,6 +3,7 @@
 import { state } from "../../../core/store.js";
 import { esc, hm, tClock, dayKey, dayLabel, monthLabel, minsOfDay, parseHM } from "../../../utils/format.js";
 import { monthOptions } from "../../components/monthOptions.js";
+import { icons } from "../../components/icons.js";
 
 export function tabRecords() {
   var ym = state.month, only = state.recPerson;
@@ -25,8 +26,8 @@ export function tabRecords() {
     '</div>';
 
   html += '<div class="btnrow">' +
-      '<button class="btn wa" data-act="wa-weekly">Weekly report</button>' +
-      '<button class="btn wa" data-act="wa-monthly">' + esc(monthLabel(ym)) + ' report</button>' +
+      '<button class="btn wa" data-act="wa-weekly">' + icons.whatsapp + 'Weekly</button>' +
+      '<button class="btn wa" data-act="wa-monthly">' + icons.whatsapp + esc(monthLabel(ym).split(" ")[0]) + ' report</button>' +
     '</div><p class="note">Opens WhatsApp with the report ready — pick your group and send.</p>';
 
   var byDay = {}, days = [];
@@ -179,8 +180,8 @@ export function tabRecords() {
     '</div>' +
 
     '<div class="btnrow">' +
-      '<button class="btn go" data-act="xlsx">Download Excel</button>' +
-      '<button class="btn quiet" data-act="refresh">Refresh</button>' +
+      '<button class="btn go" data-act="xlsx">' + icons.download + 'Excel</button>' +
+      '<button class="btn quiet" data-act="refresh">' + icons.refresh + 'Refresh</button>' +
     '</div>' +
 
     '<p class="msg">' +

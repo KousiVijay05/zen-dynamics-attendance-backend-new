@@ -14,7 +14,8 @@ import {
   dayKey,
   dayLabel,
   monthLabel,
-  ymKey
+  ymKey,
+  shortDate
 } from "../../utils/format.js";
 
 import { distanceNow } from "../../domain/geofence.js";
@@ -28,6 +29,7 @@ import { payrollFor, money } from "../../domain/payroll.js";
 import { leaveBalance, leavesFor } from "../../domain/leave.js";
 import { proxBlock, lockedBlock } from "../components/proximity.js";
 import { brandMark } from "../components/brand.js";
+import { icons } from "../components/icons.js";
 
 export function vStaff() {
   enforceBoundary();
@@ -80,7 +82,7 @@ export function vStaff() {
             new Date().toLocaleDateString([], {
               weekday: "long",
               day: "numeric",
-              month: "long"
+              month: "short"
             }) +
           '</div>' +
         '</div>' +
@@ -89,10 +91,10 @@ export function vStaff() {
       '<div class="acts">' +
         (
           state.me.admin
-            ? '<button class="btn quiet small" data-act="goadmin">Admin</button>'
+            ? '<button class="btn quiet small" data-act="goadmin">' + icons.shield + 'Admin</button>'
             : ""
         ) +
-        '<button class="btn quiet small" data-act="signout">Sign out</button>' +
+        '<button class="btn quiet small" data-act="signout" aria-label="Sign out" title="Sign out">' + icons.out + (state.me.admin ? "" : "Sign out") + '</button>' +
       '</div>' +
     '</div>';
 
@@ -129,20 +131,24 @@ export function vStaff() {
     : hms(tot);
 
   var cap = open
-    ? "On shift since " + tClock(open.entry.start)
+    ? "Since " + tClock(open.entry.start) + (open.entry.shiftName ? " · " + open.entry.shiftName : "")
     : (
         tot
-          ? "Logged today"
-          : "Not clocked in"
+          ? "Worked today"
+          : "Tap below when you arrive"
       );
+
+  var chip = open
+    ? '<div class="chip on"><i></i>On shift</div>'
+    : '<div class="chip"><i></i>' + (tot ? "Off the clock" : "Not clocked in") + '</div>';
 
   var btn = open
     ? '<button class="punch out" data-act="out" ' +
         (allTasksDone ? "" : "disabled") +
-        '>Clock out</button>'
+        '>' + icons.out + 'Clock out</button>'
     : '<button class="punch" data-act="in" ' +
         (inside ? "" : "disabled") +
-        '>Clock in</button>';
+        '>' + icons.login + 'Clock in</button>';
 
   var taskHtml = "";
 
@@ -196,8 +202,8 @@ export function vStaff() {
     head +
     proxBlock() +
 
-    '<div class="clock">' +
-      (open ? '<div class="live">live</div>' : "") +
+    '<div class="clock' + (open ? " live" : "") + '">' +
+      chip +
 
       '<div class="read">' +
         read +
@@ -211,12 +217,11 @@ export function vStaff() {
 
       btn +
       why +
+    '</div>' +
 
-      myMonth() +
-      myHistory() +
-      myLeave() +
-
-    '</div>'
+    myMonth() +
+    myHistory() +
+    myLeave()
   );
 
   function myMonth() {
@@ -226,46 +231,16 @@ export function vStaff() {
     );
 
     return (
-      "<h2>" +
-        monthLabel(ymKey(Date.now())) +
-      "</h2>" +
-
-      '<div class="rows">' +
-
-        '<div class="row">' +
-          '<span>Days present</span>' +
-          '<span class="dur">' +
-            r.credited.toFixed(1) +
-            " / " +
-            r.workingDays +
-          '</span>' +
-        '</div>' +
-
-        '<div class="row">' +
-          '<span>Hours worked</span>' +
-          '<span class="dur">' +
-            r.hours.toFixed(1) +
-          '</span>' +
-        '</div>' +
-
-        '<div class="row">' +
-          '<span>Late arrivals</span>' +
-          '<span class="dur">' +
-            r.lates +
-          '</span>' +
-        '</div>' +
-
-        (
-          r.salary
-            ? '<div class="row">' +
-                '<span>Estimated pay</span>' +
-                '<span class="dur">' +
-                  money(r.net) +
-                '</span>' +
-              '</div>'
-            : ""
-        ) +
-
+      "<h2>" + monthLabel(ymKey(Date.now())) + "</h2>" +
+      '<div class="tiles">' +
+        '<div class="tile"><span class="k">Days present</span><span class="v">' +
+          (r.credited % 1 ? r.credited.toFixed(1) : r.credited) + '<small>/ ' + r.workingDays + '</small></span></div>' +
+        '<div class="tile"><span class="k">Hours worked</span><span class="v">' +
+          r.hours.toFixed(1) + '<small>h</small></span></div>' +
+        '<div class="tile"><span class="k">Late arrivals</span><span class="v">' + r.lates + '</span></div>' +
+        (r.salary
+          ? '<div class="tile gold"><span class="k">Estimated pay</span><span class="v">' + money(r.net) + '</span></div>'
+          : '<div class="tile"><span class="k">Approved leave</span><span class="v">' + r.leave + '<small>days</small></span></div>') +
       '</div>'
     );
   }
@@ -293,7 +268,7 @@ export function vStaff() {
 
     if (!done.length) {
       return (
-        '<h2>Your shifts</h2>' +
+        '<h2>Recent shifts</h2>' +
         '<div class="rows">' +
           '<div class="empty">No completed shifts yet.</div>' +
         '</div>'
@@ -321,7 +296,7 @@ export function vStaff() {
     });
 
     var html =
-      '<h2>Your shifts</h2>' +
+      '<h2>Recent shifts</h2>' +
       '<div class="rows">';
 
     groups.forEach(function (g) {
@@ -370,21 +345,26 @@ export function vStaff() {
   function myLeave() {
     var bal = leaveBalance(state.me.id, new Date().getFullYear());
     var mine = leavesFor(state.me.id).slice().sort(function (a, b) { return b.requestedAt - a.requestedAt; });
+    var usedPct = bal.total ? Math.min(100, Math.round((bal.total - bal.remaining) / bal.total * 100)) : 0;
 
     var html =
       '<h2>Leave</h2>' +
-      '<div class="stat"><span class="k">Remaining this year</span><span class="v">' +
-        bal.remaining + ' / ' + bal.total +
-      '</span></div>' +
+      '<div class="card">' +
+        '<div class="balance">' +
+          '<div><span class="k">Left this year</span><span class="v">' + bal.remaining + ' <small>of ' + bal.total + ' days</small></span></div>' +
+          '<div class="side">' + bal.used + ' used' + (bal.pending ? '<br>' + bal.pending + ' pending' : '') + '</div>' +
+        '</div>' +
+        '<div class="meter"><i style="width:' + usedPct + '%"></i></div>' +
 
-      '<div class="field pair">' +
-        '<div><label for="lv_from">From</label><input id="lv_from" type="date"></div>' +
-        '<div><label for="lv_to">To</label><input id="lv_to" type="date"></div>' +
-      '</div>' +
-      '<div class="field"><label for="lv_reason">Reason (optional)</label>' +
-        '<input id="lv_reason" type="text" placeholder="e.g. Family event"></div>' +
-      '<div class="btnrow"><button class="btn go wide" data-act="leaverequest">Request leave</button></div>' +
-      '<p class="msg' + (state.msgOk ? " ok" : "") + '">' + esc(state.msg) + '</p>';
+        '<div class="field pair">' +
+          '<div><label for="lv_from">From</label><input id="lv_from" type="date"></div>' +
+          '<div><label for="lv_to">To</label><input id="lv_to" type="date"></div>' +
+        '</div>' +
+        '<div class="field"><label for="lv_reason">Reason (optional)</label>' +
+          '<input id="lv_reason" type="text" placeholder="e.g. Family function"></div>' +
+        '<div class="btnrow"><button class="btn go wide" data-act="leaverequest">Request leave</button></div>' +
+        '<p class="msg' + (state.msgOk ? " ok" : "") + '">' + esc(state.msg) + '</p>' +
+      '</div>';
 
     if (mine.length) {
       html += '<div class="rows">' +
@@ -392,18 +372,18 @@ export function vStaff() {
           return '<div class="row">' +
             '<span>' +
               '<span class="span">' +
-                esc(l.from) + (l.to !== l.from ? ' – ' + esc(l.to) : '') +
+                esc(fmtRange(l.from, l.to)) +
                 (l.status === "approved" ? '<span class="tag on">approved</span>'
                   : l.status === "rejected" ? '<span class="tag">rejected</span>'
                   : '<span class="tag pending">pending</span>') +
               '</span>' +
-              (l.reason ? '<br><span class="meta">' + esc(l.reason) + '</span>' : '') +
+              '<br><span class="meta">' + l.days + ' day' + (l.days === 1 ? '' : 's') + (l.reason ? ' · ' + esc(l.reason) : '') + '</span>' +
             '</span>' +
             '<span>' +
-              '<button class="btn wa small" data-act="wa-leave" data-id="' + l.id + '" title="Share on WhatsApp">WhatsApp</button> ' +
+              '<button class="btn wa small icon" data-act="wa-leave" data-id="' + l.id + '" title="Share on WhatsApp" aria-label="Share on WhatsApp">' + icons.whatsapp + '</button>' +
               (l.status === "pending"
                 ? '<button class="btn quiet small" data-act="leavecancel" data-id="' + l.id + '">Cancel</button>'
-                : '<span class="dur">' + l.days + 'd</span>') +
+                : '') +
             '</span>' +
           '</div>';
         }).join('') +
@@ -412,4 +392,10 @@ export function vStaff() {
 
     return html;
   }
+}
+
+/* "2026-10-08" .. "2026-10-09" -> "8 Oct – 9 Oct" */
+function fmtRange(from, to) {
+  var f = shortDate;
+  return from === to ? f(from) : f(from) + " – " + f(to);
 }

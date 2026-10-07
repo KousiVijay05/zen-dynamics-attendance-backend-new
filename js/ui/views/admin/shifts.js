@@ -8,8 +8,7 @@ export function tabShifts() {
   var shifts = Array.isArray(state.cfg.shifts) ? state.cfg.shifts : [];
   var editing = state.editShiftId ? shifts.filter(function (s) { return s.id === state.editShiftId; })[0] : null;
 
-  html += "<h2>Shift Master</h2>" +
-    '<p class="muted">Create your common staff shifts here. You can change them later when needed.</p>';
+  html += '<p class="note" style="margin-top:4px">Create your staff shifts here, then assign them in People. Lateness is measured from each shift\'s start time.</p>';
 
   html +=
     '<div class="card">' +
@@ -41,7 +40,7 @@ export function tabShifts() {
     "</div>";
 
   html +=
-    "<h3>Existing shifts</h3>" +
+    "<h2>Shifts</h2>" +
     '<div class="rows">';
 
   if (!shifts.length) {

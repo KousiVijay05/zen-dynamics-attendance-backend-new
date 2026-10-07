@@ -684,3 +684,10 @@ names) — 77 automated checks. Fixed what it found:
 - **Narrow phones**: in People, Edit/Off move under the name so names and
   "no pay set" don't break over lines; date boxes no longer clip
   "dd-mm-yyyy".
+
+## 2026-10-07 — New address: zenanddynamics.web.app (v22)
+
+The app moved from `kousivijay05.github.io/zen-dynamics-attendance-backend-new/`
+to **https://zenanddynamics.web.app** (Firebase Hosting, free Spark plan,
+same Firebase project). The old address forwards automatically. Added the
+new domain to Firebase Authentication's authorized domains.

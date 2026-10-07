@@ -88,7 +88,18 @@ free **Spark** plan.
   v19); `firebase/migrate-security.js` moved accounts to Firebase
   Authentication (v17). Both are one-off.
 
-## Deploying the frontend
+## Where it lives
+
+**https://zenanddynamics.web.app** — Firebase Hosting (free), site
+`zenanddynamics` in the same project. Publish with
+`npx firebase-tools deploy --only hosting` from this folder (`firebase.json`
+lists what's published; docs and Firebase config files are left out).
+
+The old GitHub Pages address forwards there (a one-line script at the top
+of `index.html`), so pushing to GitHub keeps the forwarder current but the
+app itself is served from Firebase.
+
+## Deploying the frontend (other hosts)
 
 Any static host works, as long as it's served over **https** (required for
 geolocation on a real device — plain http or a sandboxed preview will

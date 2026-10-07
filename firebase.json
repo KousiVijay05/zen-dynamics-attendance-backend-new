@@ -1,5 +1,18 @@
 {
   "database": {
     "rules": "firebase/database.rules.json"
+  },
+  "hosting": {
+    "site": "zenanddynamics",
+    "public": ".",
+    "ignore": [
+      "firebase.json", ".firebaserc", ".gitignore", "**/.*", "**/node_modules/**",
+      "firebase/**", "*.md", "kv-backup-*.json"
+    ],
+    "headers": [
+      { "source": "**/*.@(js|css|json|html)", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
+      { "source": "sw.js", "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store" }] },
+      { "source": "icons/**", "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }] }
+    ]
   }
 }

@@ -263,3 +263,11 @@ details.pay .net { font-weight: 800; font-variant-numeric: tabular-nums; white-s
 .row.stack > .acts-line { width: 100%; display: flex !important; gap: 8px; padding-left: 50px; }
 .row.stack > .acts-line > .btn:not(.icon) { flex: 1; }
 .muted { color: var(--ink3); font-size: 13px; }
+
+/* Narrow phones: give names the full width, buttons go underneath. */
+@media (max-width: 380px) {
+  .row.people-row { flex-wrap: wrap; }
+  .row.people-row > span:last-child { width: 100%; padding-left: 50px; }
+  .row.people-row > span:last-child > .btn { flex: 1; }
+}
+.field input[type="date"] { padding-left: 12px; padding-right: 10px; font-size: 15px; }

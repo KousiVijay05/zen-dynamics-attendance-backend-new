@@ -234,7 +234,9 @@ export function vStaff() {
       "<h2>" + monthLabel(ymKey(Date.now())) + "</h2>" +
       '<div class="tiles">' +
         '<div class="tile"><span class="k">Days present</span><span class="v">' +
-          (r.credited % 1 ? r.credited.toFixed(1) : r.credited) + '<small>/ ' + r.workingDays + '</small></span></div>' +
+          (r.credited % 1 ? r.credited.toFixed(1) : r.credited) +
+          /* "of N" counts finished working days only, so leave it off on day one */
+          (r.workingDays ? '<small>of ' + r.workingDays + '</small>' : '') + '</span></div>' +
         '<div class="tile"><span class="k">Hours worked</span><span class="v">' +
           r.hours.toFixed(1) + '<small>h</small></span></div>' +
         '<div class="tile"><span class="k">Late arrivals</span><span class="v">' + r.lates + '</span></div>' +

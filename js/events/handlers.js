@@ -34,6 +34,16 @@ import { requestLeave, cancelLeave, decideLeave, allLeaves } from "../domain/lea
 import { dailyReport, weeklyReport, monthlyReport, leaveMessage } from "../domain/reports.js";
 import { shareWhatsApp } from "../utils/whatsapp.js";
 
+/* After a successful submit, empty the form (the screen updates in place,
+   so typed values would otherwise stay put — see ui/render.js). */
+function clearFields(ids) {
+  ids.forEach(function (id) {
+    var el = $(id);
+    if (!el) return;
+    if (el.type === "checkbox") el.checked = false; else el.value = "";
+  });
+}
+
 export function initEvents() {
   var root = $("root");
 
@@ -184,7 +194,7 @@ tasks: selectedTasks
       try {
         addShift({
           name: $("shift_name").value, start: $("shift_start").value, end: $("shift_end").value
-        }).then(function (msg) { sayAndPaint(msg, true); }).catch(function (err) { say(err.message); });
+        }).then(function (msg) { clearFields(["shift_name", "shift_start", "shift_end"]); sayAndPaint(msg, true); }).catch(function (err) { say(err.message); });
       } catch (err) { say(err.message); }
       return;
     }
@@ -211,7 +221,7 @@ tasks: selectedTasks
         addStaff({
           name: $("n_name").value, username: $("n_user").value, password: $("n_pass").value,
           salary: $("n_sal").value, admin: $("n_admin").checked
-        }).then(function (msg) { sayAndPaint(msg, true); loadAdminData(); }).catch(function (err) { say(err.message); });
+        }).then(function (msg) { clearFields(["n_name", "n_user", "n_pass", "n_sal", "n_admin"]); sayAndPaint(msg, true); loadAdminData(); }).catch(function (err) { say(err.message); });
       } catch (err) { say(err.message); }
       return;
     }
@@ -246,7 +256,7 @@ tasks: selectedTasks
       try {
         requestLeave(state.me.id, {
           from: $("lv_from").value, to: $("lv_to").value, reason: $("lv_reason").value
-        }).then(function (msg) { sayAndPaint(msg, true); }).catch(function (err) { say(err.message); });
+        }).then(function (msg) { clearFields(["lv_from", "lv_to", "lv_reason"]); sayAndPaint(msg, true); }).catch(function (err) { say(err.message); });
       } catch (err) { say(err.message); }
       return;
     }

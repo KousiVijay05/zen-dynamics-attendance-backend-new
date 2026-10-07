@@ -660,3 +660,27 @@ sections, softer shadows, a rounded black header with a gold glow.
 
 No behaviour changes; every button and field works as before. All test
 suites re-run and passing.
+
+## 2026-10-07 — Fixes from a full end-to-end test pass (v21)
+
+Ran the owner's whole test checklist (setup, first sign-in, clock in/out,
+WhatsApp reports, leave, password reset, turning someone off) plus extra
+cases (outside the site, mandatory tasks, leave limits, offline, Excel,
+renaming the workplace, deleting a shift, 320px and 430px phones, very long
+names) — 77 automated checks. Fixed what it found:
+
+- **Taps could be ignored** on the staff and sign-in screens: they were
+  rebuilt from scratch every second (for the timer), so a tap landing
+  mid-rebuild was lost, and the new cards' entrance animation replayed every
+  second. The screen now updates in place (js/ui/render.js) — only the
+  timer digits change. Form fields are kept separate so text typed in one
+  field can never carry over into another; forms are emptied after a
+  successful submit.
+- **Password reset message**: someone signed in when their password was
+  reset was told "That account is no longer active". Now: "You've been
+  signed out… use the new one your administrator gave you."
+- **"Days present 0.5 / 0"** on someone's first day: the "of N" is left off
+  until there are finished working days to count.
+- **Narrow phones**: in People, Edit/Off move under the name so names and
+  "no pay set" don't break over lines; date boxes no longer clip
+  "dd-mm-yyyy".

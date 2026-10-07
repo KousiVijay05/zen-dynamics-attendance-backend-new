@@ -92,7 +92,14 @@ function applyRoster(roster) {
 /* This person's own record changed (shifts, tasks, deactivated...). The
    admin flag comes from the signed sign-in claim, never the record. */
 function applyProfile(me) {
-  if (!me || me.active === false) { signOut("That account is no longer active. Ask your administrator."); return; }
+  /* Access withdrawn while signed in: either turned off, or a new temporary
+     password was issued (which replaces the sign-in). Say so neutrally. */
+  if (!me || me.active === false) {
+    signOut(me && me.active === false
+      ? "That account is no longer active. Ask your administrator."
+      : "You've been signed out. Sign in again — if your password was just reset, use the new one your administrator gave you.");
+    return;
+  }
   me.admin = state.me.admin;
   state.me = me;
   state.roster = state.roster.map(function (p) { return p.id === me.id ? me : p; });

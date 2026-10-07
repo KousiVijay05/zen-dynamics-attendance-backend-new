@@ -64,7 +64,7 @@ availableShifts.forEach(function (s) {
   html += "<h2>Staff</h2><div class=\"rows\">";
   if (!state.roster.length) html += '<div class="empty">No staff added yet.</div>';
   state.roster.forEach(function (p) {
-    html += '<div class="row"><span class="person-cell">' + avatar(p.name, p.active === false ? "dim" : "") + '<span><span class="who">' + esc(p.name) + "</span>" +
+    html += '<div class="row people-row"><span class="person-cell">' + avatar(p.name, p.active === false ? "dim" : "") + '<span><span class="who">' + esc(p.name) + "</span>" +
       (p.admin ? '<span class="tag admin">admin</span>' : "") +
       (p.active === false ? '<span class="tag">inactive</span>' : "") +
       '<br><span class="meta">' + esc(p.username || "no user ID") +

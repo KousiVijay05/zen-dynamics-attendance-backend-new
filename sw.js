@@ -1,14 +1,14 @@
 /* Bump CACHE whenever you change any app file, otherwise phones keep
-   serving the old version. v22: moved to zenanddynamics.web.app. v21: fixes from full testing. v20: redesigned look. v19: old Google Sheets code removed. v18: WhatsApp share buttons. v17: Firebase Authentication + per-user database
+   serving the old version. v23: attendance image + shift-end reminder. v22: moved to zenanddynamics.web.app. v21: fixes from full testing. v20: redesigned look. v19: old Google Sheets code removed. v18: WhatsApp share buttons. v17: Firebase Authentication + per-user database
    rules. v16: per-shift lateness + live admin screens. v15: backend moved from
    Google Apps Script to Firebase Realtime Database (see CHANGES.md). */
-const CACHE = "attendance-v22";
+const CACHE = "attendance-v23";
 const ASSETS = [
   "./", "./index.html", "./manifest.json",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/mark.png", "./icons/logo-lockup.png",
 
-  "./styles/tokens.css?v=16", "./styles/base.css?v=16",
-  "./styles/components.css?v=16", "./styles/views.css?v=16",
+  "./styles/tokens.css?v=17", "./styles/base.css?v=17",
+  "./styles/components.css?v=17", "./styles/views.css?v=17",
 
   "./js/app.js",
   "./js/core/config.js", "./js/core/store.js",
@@ -17,7 +17,7 @@ const ASSETS = [
   "./js/domain/payroll.js", "./js/domain/reports.js", "./js/domain/roster.js",
   "./js/events/handlers.js",
   "./js/storage/storage-api.js", "./js/storage/storage-firebase.js",
-  "./js/ui/dom.js", "./js/ui/notify.js", "./js/ui/render.js",
+  "./js/ui/dom.js", "./js/ui/notify.js", "./js/ui/render.js", "./js/ui/reportImage.js",
   "./js/ui/components/brand.js", "./js/ui/components/icons.js", "./js/ui/components/monthOptions.js",
   "./js/ui/components/proximity.js", "./js/ui/components/syncStatus.js",
   "./js/ui/views/admin/index.js", "./js/ui/views/admin/leave.js", "./js/ui/views/admin/onsite.js",

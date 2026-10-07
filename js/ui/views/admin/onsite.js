@@ -36,7 +36,15 @@ export function tabOnsite() {
           '<span class="who">' + esc(p.name) + '</span></span><span class="meta">' + (t ? hm(t) + " today" : "—") + "</span></div>";
       }).join("") + "</div>"
     : '<div class="rows"><div class="empty">Everyone is on site.</div></div>');
-  html += '<div class="btnrow"><button class="btn wa wide" data-act="wa-daily">' + icons.whatsapp + "Share today on WhatsApp</button></div>";
+  html += '<div class="btnrow"><button class="btn wa wide" data-act="wa-image">' + icons.whatsapp + "Share today's attendance</button></div>";
+  var shifts = state.cfg.shifts || [];
+  if (shifts.length) {
+    html += '<div class="shift-share"><span>Or just one shift:</span>' + shifts.map(function (s) {
+      return '<button class="chip-btn" data-act="wa-image" data-id="' + esc(s.id) + '">' + esc(s.name) + "</button>";
+    }).join("") + "</div>";
+  }
+  html += '<div style="text-align:center"><button class="linkish" data-act="wa-daily">Send as text instead</button></div>';
+  html += '<p class="msg' + (state.msgOk ? " ok" : "") + '">' + esc(state.msg) + "</p>";
   html += '<div class="btnrow"><button class="btn quiet wide" data-act="refresh">' + icons.refresh + "Refresh</button></div>";
   return html;
 }

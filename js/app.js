@@ -22,8 +22,10 @@ import { startWatch, startTick } from "./domain/geofence.js";
 import { enterAs, signOut } from "./domain/auth.js";
 import { loadLeaves } from "./domain/leave.js";
 import { userIsTyping } from "./ui/dom.js";
+import { warmUpReportImage } from "./ui/reportImage.js";
 
 onChange(render);
+onChange(function () { if (state.view === "admin") warmUpReportImage(); });
 initEvents();
 render(); // show the loading skeleton immediately
 

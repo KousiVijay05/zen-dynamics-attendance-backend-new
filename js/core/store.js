@@ -25,6 +25,8 @@ export var state = {
   logs: {}, adminLoaded: false,
   period: "week", month: ymKey(Date.now()), recPerson: "all",
   editId: null, editShiftId: null, adminOnly: false,
+  /* attendance image being previewed before sharing: { url, file, caption, key } */
+  waPreview: null, waBusy: false,
   /* leave requests + decisions per staff id — see domain/leave.js */
   leaveData: {},
   /* id of the roster entry mid-forced-password-change (view === "changepw") */

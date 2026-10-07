@@ -32,7 +32,10 @@ import {
 import { exportExcel } from "../domain/excel.js";
 import { requestLeave, cancelLeave, decideLeave, allLeaves } from "../domain/leave.js";
 import { dailyReport, weeklyReport, monthlyReport, leaveMessage } from "../domain/reports.js";
-import { shareWhatsApp } from "../utils/whatsapp.js";
+import { shareWhatsApp, shareImage } from "../utils/whatsapp.js";
+import { attendanceSheet } from "../domain/reports.js";
+import { renderReportImage } from "../ui/reportImage.js";
+import { sharedKey } from "../ui/views/admin/index.js";
 
 /* After a successful submit, empty the form (the screen updates in place,
    so typed values would otherwise stay put — see ui/render.js). */
@@ -42,6 +45,11 @@ function clearFields(ids) {
     if (!el) return;
     if (el.type === "checkbox") el.checked = false; else el.value = "";
   });
+}
+
+function closePreview() {
+  if (state.waPreview) { try { URL.revokeObjectURL(state.waPreview.url); } catch (e) {} }
+  state.waPreview = null; state.waBusy = false;
 }
 
 export function initEvents() {
@@ -283,6 +291,40 @@ tasks: selectedTasks
         : act === "wa-weekly" ? weeklyReport() : monthlyReport(state.month));
       return;
     }
+    /* Attendance IMAGE: make it, show a preview; "Share" then hands it to the
+       phone's Share menu (a second, separate tap, so the share is always
+       allowed by the browser and you see what's sent first). */
+    if (act === "wa-image") {
+      if (!state.adminLoaded) { say("Still loading everyone's records — try again in a moment."); return; }
+      var day = dayKey(Date.now());
+      var sheet = attendanceSheet(day, id || null);
+      closePreview();
+      state.waBusy = true; emitChange();
+      renderReportImage(sheet).then(function (blob) {
+        var file = new File([blob], sheet.fileName, { type: "image/png" });
+        state.waPreview = { url: URL.createObjectURL(file), file: file, caption: sheet.caption, key: id ? sharedKey(day, id) : null };
+        state.waBusy = false; emitChange();
+      }).catch(function (err) { state.waBusy = false; say(err.message); emitChange(); });
+      return;
+    }
+    if (act === "wa-send") {
+      var pv = state.waPreview;
+      if (!pv) return;
+      shareImage(pv.file, pv.caption).then(function (how) {
+        if (how === "cancelled") return;
+        if (pv.key) { try { localStorage.setItem(pv.key, "1"); } catch (e) {} }
+        closePreview(); emitChange();
+        if (how === "downloaded") say("Image saved to your downloads — attach it in WhatsApp.", true);
+      });
+      return;
+    }
+    if (act === "wa-close") { closePreview(); emitChange(); return; }
+    if (act === "wa-dismiss") {
+      try { localStorage.setItem(sharedKey(dayKey(Date.now()), id), "1"); } catch (e) {}
+      emitChange();
+      return;
+    }
+
     if (act === "wa-leave") {
       var lv = allLeaves().filter(function (x) { return x.id === id; })[0];
       if (lv) shareWhatsApp(leaveMessage(lv));

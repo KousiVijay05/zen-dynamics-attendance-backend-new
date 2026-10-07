@@ -78,7 +78,11 @@ export function retryLocation() {
 export function startTick() {
   if (fenceState.ticking) return;
   fenceState.ticking = true;
+  var lastMinute = -1;
   setInterval(function () {
     if ((state.view === "staff" || state.view === "signin") && !userIsTyping()) emitChange();
+    /* admin: once a minute, so the "shift ended — share?" reminder appears on time */
+    var m = new Date().getMinutes();
+    if (state.view === "admin" && m !== lastMinute && !userIsTyping()) { lastMinute = m; emitChange(); }
   }, 1000);
 }

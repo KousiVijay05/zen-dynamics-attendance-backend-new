@@ -11,13 +11,16 @@
 ----------------------------------------------------------------*/
 
 import { state } from "../core/store.js";
-import { dayKey, hm, minsOfDay, parseHM, monthLabel } from "../utils/format.js";
+import { dayKey, hm, minsOfDay, parseHM, monthLabel, hm12 } from "../utils/format.js";
 import { monthDays } from "./payroll.js";
 import { isOnApprovedLeave } from "./leave.js";
 
 var DAY_MS = 864e5;
 
 function org() { return (state.cfg && state.cfg.org) || "Attendance"; }
+/* Admins with no shift (owners/managers) aren't expected to clock in:
+   don't list them as absent. They still appear if they did clock in. */
+function expected(p) { return !(p.admin && !(Array.isArray(p.shifts) && p.shifts.length)); }
 function active() {
   return state.roster.filter(function (p) { return p.active !== false; })
     .sort(function (a, b) { return a.name.localeCompare(b.name); });
@@ -42,10 +45,15 @@ function rangeLabel(from, to) {
 function keyPlus(k, days) { return dayKey(new Date(k + "T12:00:00").getTime() + days * DAY_MS); }
 function isWeeklyOff(k) { return state.cfg.pay.weeklyOff.indexOf(new Date(k + "T00:00:00").getDay()) >= 0; }
 
-/** One person's punches on one day -> { first, last, open, ms, late } or null. */
-export function dayInfo(p, k) {
+/** A punch belongs to `shift` if it was tagged with that shift at clock-in. */
+function inShift(e, shift) {
+  return !shift || e.shiftName === shift.name || (e.shiftStart === shift.start && e.shiftEnd === shift.end);
+}
+
+/** One person's punches on one day (optionally only one shift's) -> { first, last, open, ms, late } or null. */
+export function dayInfo(p, k, shift) {
   var list = (state.logs["log:" + p.id + ":" + k.slice(0, 4) + k.slice(5, 7)] || [])
-    .filter(function (e) { return dayKey(e.start) === k; })
+    .filter(function (e) { return dayKey(e.start) === k && inShift(e, shift); })
     .sort(function (a, b) { return a.start - b.start; });
   if (!list.length) return null;
   var r = { first: list[0].start, last: null, open: false, ms: 0 };
@@ -66,7 +74,7 @@ export function dailyReport(k) {
     var d = dayInfo(p, k);
     if (d) present.push({ p: p, d: d });
     else if (isOnApprovedLeave(p.id, k)) leave.push(p);
-    else if (!(p.joined && k < p.joined)) notIn.push(p);
+    else if (!(p.joined && k < p.joined) && expected(p)) notIn.push(p);
   });
   present.sort(function (a, b) { return a.d.first - b.d.first; });
 
@@ -142,4 +150,48 @@ export function leaveMessage(l) {
   if (l.status === "pending") out.push("Status: ⏳ waiting for approval");
   else if (l.decidedBy) out.push((l.status === "approved" ? "Approved" : "Decided") + " by " + l.decidedBy);
   return out.join("\n");
+}
+
+/* ---------------------------------------------------------------
+   Structured data for the attendance IMAGE (js/ui/reportImage.js).
+   `shiftId` limits it to one shift: the people assigned to that shift
+   and only the punches tagged with it. Without it: the whole day.
+----------------------------------------------------------------*/
+export function attendanceSheet(k, shiftId) {
+  var shift = shiftId ? (state.cfg.shifts || []).filter(function (s) { return s.id === shiftId; })[0] : null;
+  var people = active().filter(function (p) { return !shift || (Array.isArray(p.shifts) && p.shifts.indexOf(shift.id) >= 0); });
+  var present = [], leave = [], absent = [];
+  people.forEach(function (p) {
+    if (p.joined && k < p.joined) return;
+    var d = dayInfo(p, k, shift);
+    if (d) {
+      var first = (state.logs["log:" + p.id + ":" + k.slice(0, 4) + k.slice(5, 7)] || [])
+        .filter(function (e) { return dayKey(e.start) === k && inShift(e, shift); })
+        .sort(function (a, b) { return a.start - b.start; })[0];
+      present.push({ name: p.name, shift: first && first.shiftName || "", inT: t12(d.first), outT: d.open ? null : t12(d.last),
+                     hours: hm(d.ms), late: d.late, first: d.first });
+    } else if (isOnApprovedLeave(p.id, k)) leave.push(p.name);
+    else if (expected(p)) absent.push(p.name);
+  });
+  present.sort(function (a, b) { return a.first - b.first; });
+  return {
+    org: org(),
+    title: shift ? shift.name : "Daily attendance",
+    subtitle: dLabel(k) + (shift ? " · " + hm12(shift.start) + " – " + hm12(shift.end) : (isWeeklyOff(k) ? " · weekly off" : "")),
+    present: present, leave: leave, absent: absent,
+    total: present.length + leave.length + absent.length,
+    lateCount: present.filter(function (x) { return x.late; }).length,
+    generated: dLabel(dayKey(Date.now())) + ", " + t12(Date.now()),
+    fileName: (shift ? shift.name.replace(/[^A-Za-z0-9]+/g, "-") : "attendance") + "-" + k + ".png",
+    caption: "📋 " + org() + " — " + (shift ? shift.name : "Daily attendance") + ", " + dLabel(k)
+  };
+}
+
+/** Shifts that ended in the last two hours today (for the "share it" reminder). */
+export function endedShifts() {
+  var now = new Date(), mins = now.getHours() * 60 + now.getMinutes();
+  return (state.cfg.shifts || []).filter(function (s) {
+    var end = parseHM(s.end);
+    return mins >= end && mins - end <= 120;
+  });
 }

@@ -691,3 +691,23 @@ The app moved from `kousivijay05.github.io/zen-dynamics-attendance-backend-new/`
 to **https://zenanddynamics.web.app** (Firebase Hosting, free Spark plan,
 same Firebase project). The old address forwards automatically. Added the
 new domain to Firebase Authentication's authorized domains.
+
+## 2026-10-07 — Attendance as an image + shift-end reminder (v23)
+
+- **Attendance image**: Admin → On site → "Share today's attendance" (or one
+  shift via the chips underneath) draws a black-and-gold card — present /
+  late / on leave counts, each person's in → out times, hours, LATE badge,
+  who's on leave and who isn't in. A preview opens first; "Share to
+  WhatsApp" hands the PNG to the phone's own Share menu. "Send as text
+  instead" keeps the old text message.
+- **Shift-end reminder**: for two hours after a shift's end time, the admin
+  screen shows "Morning Shift ended — share the attendance?" with Share and
+  × (dismiss). Remembered per device, per day.
+- **Privacy**: drawn on the phone (canvas), never uploaded. The Web Share
+  API only hands the file to the system Share menu: the app never sees
+  WhatsApp, contacts or chats, gets nothing back, and asks for no
+  permission. Devices without a Share menu download the image instead.
+- Admins with no shift aren't listed as "not in" (text or image).
+
+New: `js/ui/reportImage.js`; `attendanceSheet()` / `endedShifts()` in
+reports.js. Tests: 14 new (image + reminder) and all existing suites.

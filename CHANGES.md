@@ -732,3 +732,24 @@ reports.js. Tests: 14 new (image + reminder) and all existing suites.
 
 Tests: 14 new (leaving mid-shift, brief GPS jump, admin exempt, setting
 off/on, no signal) plus all suites re-run: 73 + 77 + 12 + 10 + 14 + 14.
+
+## 2026-10-09 — Staff are signed out when they leave the site (v24)
+
+- New setting, **on by default**: Admin → Settings → "Sign staff out when
+  they leave the site". Once someone has been outside the zone for at least
+  a minute (or the auto clock-out delay, if longer), their open shift is
+  closed (tagged auto, as before) and they're signed out with "You left the
+  gym, so you've been signed out." — shown on the sign-in / outside-the-site
+  screen. Their cached records are cleared from the phone. Admins are exempt
+  while "Administrators can sign in from anywhere" is on.
+- GPS accuracy now counts in the person's favour (capped at 100 m) before
+  deciding they're outside, for both this and the automatic clock-out —
+  fewer false clock-outs from a jumpy fix.
+- Sign-out waits up to 5 s for unsent punches to reach the server.
+- **Fixed**: a punch made with no signal could be lost if the person was
+  signed out before the signal returned (the server refused it as nobody
+  was signed in, and the app dropped it). It's now kept and sent the next
+  time that person signs in.
+
+Tests: 14 new (walk out mid-shift, brief GPS jump, admin exempt, setting
+off, leaving with no signal) and all existing suites re-run.

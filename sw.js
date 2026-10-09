@@ -1,14 +1,14 @@
 /* Bump CACHE whenever you change any app file, otherwise phones keep
-   serving the old version. v28: import sales-register exports. v27: client Excel import. v26: clients module. v25: cleaner black (no brown tint). v24: sign staff out when they leave the site. v23: attendance image + shift-end reminder. v22: moved to zenanddynamics.web.app. v21: fixes from full testing. v20: redesigned look. v19: old Google Sheets code removed. v18: WhatsApp share buttons. v17: Firebase Authentication + per-user database
+   serving the old version. v29: client membership history. v28: import sales-register exports. v27: client Excel import. v26: clients module. v25: cleaner black (no brown tint). v24: sign staff out when they leave the site. v23: attendance image + shift-end reminder. v22: moved to zenanddynamics.web.app. v21: fixes from full testing. v20: redesigned look. v19: old Google Sheets code removed. v18: WhatsApp share buttons. v17: Firebase Authentication + per-user database
    rules. v16: per-shift lateness + live admin screens. v15: backend moved from
    Google Apps Script to Firebase Realtime Database (see CHANGES.md). */
-const CACHE = "attendance-v28";
+const CACHE = "attendance-v29";
 const ASSETS = [
   "./", "./index.html", "./manifest.json",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/mark.png", "./icons/logo-lockup.png",
 
-  "./styles/tokens.css?v=20", "./styles/base.css?v=20",
-  "./styles/components.css?v=20", "./styles/views.css?v=20",
+  "./styles/tokens.css?v=21", "./styles/base.css?v=21",
+  "./styles/components.css?v=21", "./styles/views.css?v=21",
 
   "./js/app.js",
   "./js/core/config.js", "./js/core/store.js",

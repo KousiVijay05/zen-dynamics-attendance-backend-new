@@ -845,3 +845,19 @@ Verified with the owner's real export on the LOCAL emulator only (data wiped
 afterwards): 307 invoices → 175 clients, 296 payments, ₹24,06,202, matching
 the file month by month for all 26 months; re-import adds nothing.
 Regression: import (25), clients (46).
+
+## 2026-10-10 — Client membership history (v29)
+
+- **Client page**: total paid, member since, number of memberships, last
+  payment; **Membership history** — every plan, newest first, with start →
+  end, current / upcoming / ended, sessions used (packs), and each payment
+  (date, mode, amount) under the plan it paid for; any unmatched payments
+  listed separately; notes (e.g. balance due) shown at the top.
+- **Reports → "Full client history"** Excel: Clients (status, current plan,
+  member since, memberships, total paid, last payment, notes), Memberships
+  (every plan), Payments (every payment ever recorded).
+- Payment history loads every month from the earliest plan/joining date.
+
+Verified with the owner's real export on the LOCAL emulator (wiped after):
+all 175 clients' totals match the file; Excel has 175 clients, 305
+memberships, 296 payments. clients.test.js now 49 checks.

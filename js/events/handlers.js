@@ -33,7 +33,8 @@ import { exportExcel } from "../domain/excel.js";
 import { requestLeave, cancelLeave, decideLeave, allLeaves } from "../domain/leave.js";
 import {
   toggleTick, addClient, updateClient, renewClient, setClientActive, reminderText, waLinkTo, clientPhone,
-  loadMonth, exportClientsExcel, today as clToday, downloadTemplate, readImportFile, importClients
+  loadMonth, exportClientsExcel, today as clToday, downloadTemplate, readImportFile, importClients,
+  loadAllPayments, exportFullHistory
 } from "../domain/clients.js";
 import { dailyReport, weeklyReport, monthlyReport, leaveMessage } from "../domain/reports.js";
 import { shareWhatsApp, shareImage } from "../utils/whatsapp.js";
@@ -358,7 +359,11 @@ tasks: selectedTasks
       if (v === "report") loadMonth(state.clMonth || clToday().slice(0, 7));
       return;
     }
-    if (act === "cl-edit") { state.clEdit = id; state.clRenewType = null; state.msg = ""; emitChange(); window.scrollTo(0, 0); return; }
+    if (act === "cl-edit") {
+      state.clEdit = id; state.clRenewType = null; state.msg = ""; emitChange(); window.scrollTo(0, 0);
+      if (!state.clPaysAll) loadAllPayments();
+      return;
+    }
     if (act === "cl-closeedit") { state.clEdit = null; state.clSub = "all"; state.msg = ""; emitChange(); return; }
     if (act === "cl-add") {
       try {
@@ -407,6 +412,11 @@ tasks: selectedTasks
       if (!state.clImport) return;
       importClients(state.clImport).then(function (msg) { state.clImport = null; sayAndPaint(msg, true); })
         .catch(function (err) { say(err.message); });
+      return;
+    }
+    if (act === "cl-xlsx-all") {
+      var go = function () { try { say(exportFullHistory(), true); } catch (err) { say(err.message); } };
+      if (state.clPaysAll) go(); else { say("Loading every payment…", true); loadAllPayments().then(go); }
       return;
     }
     if (act === "cl-xlsx") {

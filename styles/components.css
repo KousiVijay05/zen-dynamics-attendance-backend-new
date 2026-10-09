@@ -337,3 +337,8 @@ details.pay .net { font-weight: 800; font-variant-numeric: tabular-nums; white-s
 .import-sum { margin: 14px 0 8px; font-size: 14px; line-height: 1.7; }
 .import-sum .tag { margin-left: 0; margin-right: 6px; }
 .import-rows { max-height: 360px; overflow: auto; }
+
+/* ---------- client membership history ---------- */
+.ledger-row { align-items: flex-start; }
+.pay-line { display: inline-block; margin-top: 4px; font-size: 12.5px; font-weight: 650; color: var(--status-good); }
+.pay-line.none { color: var(--ink3); font-weight: 600; }

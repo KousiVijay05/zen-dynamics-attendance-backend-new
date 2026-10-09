@@ -61,7 +61,7 @@ export function watchTicks() {
 export function stopClients() {
   if (unwatch) unwatch();
   unwatch = null; watchFrom = null;
-  state.clients = []; state.clientPriv = {}; state.clAtt = {}; state.clPays = {}; state.clOld = {}; state.clLoaded = false;
+  state.clients = []; state.clientPriv = {}; state.clAtt = {}; state.clPays = {}; state.clOld = {}; state.clLoaded = false; state.clPaysAll = false;
 }
 
 /* ---------- plans + status ---------- */
@@ -576,4 +576,88 @@ function toPlan(x) {
   var m = /(\d+)\s*sessions?/i.exec(x.plan);
   if (m) return { type: "pack", name: x.plan, start: x.start, end: x.end, sessions: Math.min(500, Math.max(1, +m[1])) };
   return { type: "time", name: x.plan, start: x.start, end: x.end };
+}
+
+/* ---------------------------------------------------------------
+   Full membership record (client page + "Full client history" Excel).
+   Payments are stored per month (cl:pay:yyyymm); this loads every month
+   from the earliest plan/joining date up to now.
+----------------------------------------------------------------*/
+var allPaysFrom = null;
+
+export function loadAllPayments() {
+  var first = today();
+  state.clients.forEach(function (c) {
+    if (c.joined && c.joined < first) first = c.joined;
+    if (c.plan && c.plan.start && c.plan.start < first) first = c.plan.start;
+    (((state.clientPriv || {})[c.id] || {}).history || []).forEach(function (h) { if (h.start && h.start < first) first = h.start; });
+  });
+  if (first < "2015-01-01") first = "2015-01-01";
+  var keys = [], y = +first.slice(0, 4), m = +first.slice(5, 7), endY = +today().slice(0, 4), endM = +today().slice(5, 7);
+  while (y < endY || (y === endY && m <= endM)) {
+    keys.push("cl:pay:" + y + (m < 10 ? "0" : "") + m);
+    m++; if (m > 12) { m = 1; y++; }
+  }
+  return Promise.all(keys.map(function (k) {
+    return sget(k, true).then(function (v) { state.clPays[k] = Array.isArray(v) ? v : []; });
+  })).then(function () { allPaysFrom = first; state.clPaysAll = true; emitChange(); });
+}
+
+function allPayments() {
+  var out = [];
+  Object.keys(state.clPays || {}).forEach(function (k) { (state.clPays[k] || []).forEach(function (p) { out.push(p); }); });
+  return out;
+}
+
+/** Everything about one client: plans (newest first) with their payments, and totals. */
+export function clientLedger(c) {
+  var t = today();
+  var priv = (state.clientPriv || {})[c.id] || {};
+  var plans = (priv.history || []).map(function (h) { return Object.assign({ past: true }, h); });
+  if (c.plan) plans.push(Object.assign({ current: true }, c.plan));
+  plans.sort(function (a, b) { return a.start < b.start ? 1 : a.start > b.start ? -1 : 0; });
+  var pays = allPayments().filter(function (p) { return p.clientId === c.id; })
+    .sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; });
+  var used = {};
+  plans.forEach(function (pl) {
+    pl.payments = pays.filter(function (p) { return !used[p.id] && p.start === pl.start && (!p.plan || p.plan === pl.name); });
+    pl.payments.forEach(function (p) { used[p.id] = true; });
+    pl.paid = pl.payments.reduce(function (s, p) { return s + p.amount; }, 0);
+    pl.state = pl.start > t ? "upcoming" : (pl.end && pl.end < t) ? "ended" : pl.current ? "current" : "ended";
+    if (pl.current && pl.type === "pack") { var st = clientStatus(c); pl.state = st.kind === "expired" ? "ended" : pl.state; pl.usedNow = usedSessions(c); }
+  });
+  var other = pays.filter(function (p) { return !used[p.id]; });
+  var total = pays.reduce(function (s, p) { return s + p.amount; }, 0);
+  var since = plans.length ? plans[plans.length - 1].start : c.joined;
+  if (c.joined && c.joined < since) since = c.joined;
+  return { plans: plans, other: other, payments: pays, total: total, since: since, lastPaid: pays.length ? pays[0] : null,
+           complete: !!state.clPaysAll };
+}
+
+/** Excel with every client, every membership and every payment ever recorded. */
+export function exportFullHistory() {
+  if (typeof XLSX === "undefined") throw new Error("Excel library didn't load. Check the connection and reload.");
+  if (!state.clPaysAll) throw new Error("Still loading payment history — try again in a moment.");
+  var wb = XLSX.utils.book_new();
+  var clients = [["Client", "Phone", "Status", "Current plan", "Start", "End", "Sessions", "Used", "Member since",
+                  "Memberships", "Total paid", "Last payment", "Last amount", "Notes"]];
+  var plans = [["Client", "Plan", "Type", "Start", "End", "Sessions", "Status", "Paid for this plan"]];
+  var pays = [["Date", "Client", "Plan", "Plan start", "Plan end", "Amount", "Mode", "Recorded by"]];
+  state.clients.slice().sort(function (a, b) { return a.name.localeCompare(b.name); }).forEach(function (c) {
+    var L = clientLedger(c), st = clientStatus(c), p = c.plan || {}, priv = (state.clientPriv || {})[c.id] || {};
+    clients.push([c.name, priv.phone || "", st.label, p.name || "", p.start || "", p.end || "", p.sessions || "",
+      p.type === "pack" ? usedSessions(c) : "", L.since || "", L.plans.length, L.total,
+      L.lastPaid ? L.lastPaid.date : "", L.lastPaid ? L.lastPaid.amount : "", priv.notes || ""]);
+    L.plans.slice().reverse().forEach(function (pl) {
+      plans.push([c.name, pl.name, pl.type === "pack" ? "Session pack" : "Time", pl.start, pl.end || "", pl.sessions || "", pl.state, pl.paid]);
+    });
+    L.payments.slice().reverse().forEach(function (x) {
+      pays.push([x.date, c.name, x.plan || "", x.start || "", x.end || "", x.amount, x.mode, x.by || ""]);
+    });
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(clients), "Clients");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(plans), "Memberships");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(pays), "Payments");
+  XLSX.writeFile(wb, "clients-full-history-" + today() + ".xlsx");
+  return "Full history downloaded.";
 }

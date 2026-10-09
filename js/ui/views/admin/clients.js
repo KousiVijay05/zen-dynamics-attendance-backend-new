@@ -3,7 +3,37 @@
 import { state } from "../../../core/store.js";
 import { esc, shortDate } from "../../../utils/format.js";
 import { money } from "../../../domain/payroll.js";
-import { clientStatus, clientPhone, usedSessions, suggestedStart, today, monthReport, PAY_MODES, importable } from "../../../domain/clients.js";
+import { clientStatus, clientPhone, usedSessions, suggestedStart, today, monthReport, PAY_MODES, importable, clientLedger } from "../../../domain/clients.js";
+
+function fullDate(k) { return k ? shortDate(k) + " " + k.slice(0, 4) : "—"; }
+
+/* Summary + membership history (every plan with its payments). */
+function ledger(c) {
+  var L = clientLedger(c);
+  var html = '<div class="tiles" style="margin-top:12px">' +
+    '<div class="tile gold"><span class="k">Total paid</span><span class="v">' + money(L.total) + "</span></div>" +
+    '<div class="tile"><span class="k">Member since</span><span class="v" style="font-size:19px">' + esc(fullDate(L.since)) + "</span></div>" +
+    '<div class="tile"><span class="k">Memberships</span><span class="v">' + L.plans.length + "</span></div>" +
+    '<div class="tile"><span class="k">Last payment</span><span class="v" style="font-size:19px">' + esc(L.lastPaid ? fullDate(L.lastPaid.date) : "—") + "</span></div></div>";
+  if (!L.complete) html += '<div class="loading" style="margin-top:10px">Loading payment history…</div>';
+  html += "<h2>Membership history</h2>" + '<div class="rows">' + (L.plans.length ? L.plans.map(function (pl) {
+    var tag = pl.state === "current" ? '<span class="tag on">current</span>' : pl.state === "upcoming" ? '<span class="tag pending">upcoming</span>' : '<span class="tag">ended</span>';
+    var dates = fullDate(pl.start) + " → " + (pl.end ? fullDate(pl.end) : "no end date");
+    var sess = pl.type === "pack" ? " · " + (pl.current ? (pl.usedNow || 0) : (pl.used || 0)) + " of " + pl.sessions + " sessions used" : "";
+    return '<div class="row ledger-row"><span><span class="who">' + esc(pl.name) + "</span>" + tag +
+      '<br><span class="meta">' + esc(dates + sess) + "</span>" +
+      (pl.payments.length ? pl.payments.map(function (p) {
+        return '<br><span class="pay-line">' + esc(fullDate(p.date)) + " · " + esc(p.mode) + "</span>";
+      }).join("") : '<br><span class="pay-line none">No payment recorded</span>') +
+      '</span><span class="dur">' + (pl.paid ? money(pl.paid) : "—") + "</span></div>";
+  }).join("") : '<div class="empty">No plans yet.</div>') + "</div>";
+  if (L.other.length) {
+    html += "<h2>Other payments</h2>" + '<div class="rows">' + L.other.map(function (p) {
+      return '<div class="row"><span><span class="who">' + esc(p.plan || "Payment") + '</span><br><span class="meta">' + esc(fullDate(p.date) + " · " + p.mode) + '</span></span><span class="dur">' + money(p.amount) + "</span></div>";
+    }).join("") + "</div>";
+  }
+  return html;
+}
 
 /* Preview for a sales-register export (one row per invoice, grouped per client). */
 function registerPreview(pv) {
@@ -104,14 +134,14 @@ function planFields(p, type, start) {
 function detail(c) {
   var st = clientStatus(c), priv = (state.clientPriv || {})[c.id] || {};
   var type = state.clRenewType || (c.plan && c.plan.type) || "time";
-  var hist = (priv.history || []).slice().reverse();
   var html = '<div class="btnrow" style="margin-top:4px"><button class="btn quiet small" data-act="cl-closeedit">' + icons.back + "All clients</button></div>" +
     '<div class="card"><div class="person-cell" style="margin-bottom:6px">' + avatar(c.name) +
       '<span><span class="who" style="font-size:18px">' + esc(c.name) + "</span> " + pill(st) +
       '<br><span class="meta">' + esc(c.plan ? c.plan.name + " · from " + shortDate(c.plan.start) : "No plan") + " · " + esc(st.label) +
       (c.plan && c.plan.type === "pack" ? " · used " + usedSessions(c) + " of " + c.plan.sessions : "") + "</span></span></div>" +
       (clientPhone(c.id) ? '<div class="btnrow"><button class="btn wa wide" data-act="cl-wa" data-id="' + esc(c.id) + '">' + icons.whatsapp + "Send renewal reminder</button></div>" : "") +
-    "</div>";
+      (priv.notes ? '<p class="note" style="margin-top:10px">' + esc(priv.notes) + "</p>" : "") +
+    "</div>" + ledger(c);
 
   html += "<h2>Renew / new plan</h2>" + '<div class="card">' + planFields("cr", type, suggestedStart(c)) +
     '<div class="btnrow"><button class="btn go wide" data-act="cl-renew" data-id="' + esc(c.id) + '">Save renewal</button></div></div>';
@@ -123,12 +153,6 @@ function detail(c) {
     '<div class="btnrow"><button class="btn go" data-act="cl-save" data-id="' + esc(c.id) + '">Save details</button>' +
     '<button class="btn quiet" data-act="cl-toggle" data-id="' + esc(c.id) + '">' + (c.active === false ? "Restore client" : "Turn off") + "</button></div></div>";
 
-  if (hist.length) {
-    html += "<h2>Previous plans</h2>" + '<div class="rows">' + hist.map(function (h) {
-      return '<div class="row"><span><span class="who">' + esc(h.name) + '</span><br><span class="meta">' + shortDate(h.start) +
-        (h.end ? " – " + shortDate(h.end) : "") + (h.type === "pack" ? " · used " + (h.used || 0) + " of " + h.sessions : "") + "</span></span></div>";
-    }).join("") + "</div>";
-  }
   return html;
 }
 
@@ -211,7 +235,9 @@ export function tabClients() {
   html += "<h2>Payments</h2>" + '<div class="rows">' + (r.payments.length ? r.payments.map(function (p) {
     return '<div class="row"><span><span class="who">' + esc(p.name) + '</span><br><span class="meta">' + shortDate(p.date) + " · " + esc(p.plan) + " · " + esc(p.mode) + '</span></span><span class="dur">' + money(p.amount) + "</span></div>";
   }).join("") : '<div class="empty">No payments recorded this month.</div>') + "</div>";
-  html += '<div class="btnrow"><button class="btn go wide" data-act="cl-xlsx">' + icons.download + "Download Excel</button></div>";
+  html += '<div class="btnrow"><button class="btn go" data-act="cl-xlsx">' + icons.download + "This month</button>" +
+    '<button class="btn solid" data-act="cl-xlsx-all">' + icons.download + "Full client history</button></div>" +
+    '<p class="note">"Full client history": every client, every membership and every payment ever recorded, in one Excel file.</p>';
   return html + msg();
 }
 

@@ -753,3 +753,10 @@ off/on, no signal) plus all suites re-run: 73 + 77 + 12 + 10 + 14 + 14.
 
 Tests: 14 new (walk out mid-shift, brief GPS jump, admin exempt, setting
 off, leaving with no signal) and all existing suites re-run.
+
+## 2026-10-09 — Cleaner black (v25)
+
+The dark header, clock card, sign-in panel and summary card used a warm
+near-black with a strong gold glow, which read as muddy brown on many
+screens. Now a neutral deep black (#0A0A0A → #1A1A1A) with only a faint
+gold highlight. Colours only; nothing else changed.

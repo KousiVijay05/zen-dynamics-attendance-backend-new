@@ -22,8 +22,8 @@
   --line2: #EFEBE2;          /* dividers inside cards */
 
   /* the dark "hero" surfaces (header, live clock) */
-  --hero: #12110E;
-  --hero-2: #1F1C16;
+  --hero: #0A0A0A;
+  --hero-2: #1A1A1A;
   --hero-ink: #F6F1E4;
   --hero-ink2: rgba(246, 241, 228, .62);
   --hero-line: rgba(246, 241, 228, .14);
@@ -77,8 +77,8 @@
     --line: #2E2B24;
     --line2: #26241E;
 
-    --hero: #050504;
-    --hero-2: #17150F;
+    --hero: #050505;
+    --hero-2: #141414;
 
     --gold: #E2BC68;
     --gold-strong: #F0D08C;

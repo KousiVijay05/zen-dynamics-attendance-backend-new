@@ -30,7 +30,7 @@
 .clock {
   position: relative; overflow: hidden;
   background:
-    radial-gradient(90% 70% at 50% -10%, rgba(210, 170, 85, .28) 0%, rgba(210, 170, 85, 0) 70%),
+    radial-gradient(90% 70% at 50% -10%, rgba(210, 170, 85, .10) 0%, rgba(210, 170, 85, 0) 60%),
     linear-gradient(180deg, var(--hero-2), var(--hero));
   color: var(--hero-ink); border-radius: var(--radius-xl); padding: 22px 18px 18px;
   text-align: center; margin-bottom: 12px; box-shadow: var(--shadow-lg);
@@ -183,7 +183,7 @@
 
 .hero-stat {
   background:
-    radial-gradient(100% 120% at 100% 0%, rgba(210, 170, 85, .25) 0%, rgba(210, 170, 85, 0) 60%),
+    radial-gradient(100% 120% at 100% 0%, rgba(210, 170, 85, .09) 0%, rgba(210, 170, 85, 0) 50%),
     linear-gradient(180deg, var(--hero-2), var(--hero));
   color: var(--hero-ink); border-radius: var(--radius-xl); padding: 18px 20px; box-shadow: var(--shadow-lg);
   border: 1px solid rgba(210, 170, 85, .22); animation: rise .35s var(--ease) both;

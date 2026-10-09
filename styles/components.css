@@ -109,7 +109,8 @@
 .row .dur { font-weight: 750; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--ink); }
 .row .who { font-weight: 700; }
 .row .meta { font-size: 13px; color: var(--ink2); }
-.row > span:last-child:not(.dur) { display: flex; gap: 6px; flex: 0 0 auto; align-items: center; }
+/* the action group at the end of a row (only when the row has more than one part) */
+.row > span:last-child:not(:first-child):not(.dur) { display: flex; gap: 6px; flex: 0 0 auto; align-items: center; }
 .person-cell { display: flex !important; align-items: center; gap: 12px; min-width: 0; flex: 1 1 auto !important; }
 .person-cell > span { min-width: 0; }
 
@@ -329,3 +330,10 @@ details.pay .net { font-weight: 800; font-variant-numeric: tabular-nums; white-s
 .tick.on { background: var(--status-good); border-color: var(--status-good); color: #fff; box-shadow: 0 8px 18px -10px rgba(28, 122, 77, .9); }
 .cl-row.is-in { background: var(--status-good-soft); }
 .cl-row .tag { margin-left: 8px; }
+
+/* ---------- Excel import ---------- */
+.file-btn { position: relative; overflow: hidden; }
+.file-btn input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; font-size: 0; }
+.import-sum { margin: 14px 0 8px; font-size: 14px; line-height: 1.7; }
+.import-sum .tag { margin-left: 0; margin-right: 6px; }
+.import-rows { max-height: 360px; overflow: auto; }

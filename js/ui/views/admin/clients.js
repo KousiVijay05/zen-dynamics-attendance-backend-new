@@ -4,6 +4,30 @@ import { state } from "../../../core/store.js";
 import { esc, shortDate } from "../../../utils/format.js";
 import { money } from "../../../domain/payroll.js";
 import { clientStatus, clientPhone, usedSessions, suggestedStart, today, monthReport, PAY_MODES } from "../../../domain/clients.js";
+
+function importCard() {
+  var pv = state.clImport;
+  var html = '<div class="card"><h3>Import from Excel</h3>' +
+    '<p class="note" style="margin-top:4px">Download the template, fill one client per row, then choose the file. You\'ll see a preview before anything is saved. The file is read on this device — it isn\'t uploaded.</p>' +
+    '<div class="btnrow"><button class="btn quiet" data-act="cl-template">' + icons.download + 'Template</button>' +
+    '<label class="btn go file-btn">' + icons.login + 'Choose file<input id="cl_file" type="file" accept=".xlsx,.xls,.csv" /></label></div>';
+  if (state.clImportBusy) html += '<div class="loading" style="margin-top:12px">Reading the file…</div>';
+  if (pv) {
+    var ok = pv.items.filter(function (it) { return it.ok; }), bad = pv.items.filter(function (it) { return !it.ok; });
+    html += '<div class="import-sum"><b>' + esc(pv.fileName) + '</b><br>' +
+      '<span class="tag on">' + ok.length + ' ready</span>' + (bad.length ? '<span class="tag">' + bad.length + ' with a problem</span>' : "") + "</div>" +
+      '<div class="rows import-rows">' + pv.items.slice(0, 200).map(function (it) {
+        return '<div class="row"><span><span class="who">' + esc(it.name || "(no name)") + '</span>' +
+          (it.ok ? '<span class="tag on">OK</span>' : '<span class="tag">Row ' + it.row + "</span>") +
+          '<br><span class="meta">' + (it.ok ? esc(it.client.plan.name + " from " + shortDate(it.client.plan.start) + (it.pay ? " · paid " + it.pay.amount + " " + it.pay.mode : ""))
+                                               : esc(it.error)) + "</span></span></div>";
+      }).join("") + (pv.items.length > 200 ? '<div class="empty">…and ' + (pv.items.length - 200) + " more rows</div>" : "") + "</div>" +
+      '<div class="btnrow"><button class="btn go" data-act="cl-import"' + (ok.length ? "" : " disabled") + ">Import " + ok.length + " client" + (ok.length === 1 ? "" : "s") + "</button>" +
+      '<button class="btn quiet" data-act="cl-import-cancel">Cancel</button></div>' +
+      (bad.length ? '<p class="note">Rows with a problem are skipped. Fix them in the file and import it again — clients already imported are recognised as duplicates.</p>' : "");
+  }
+  return html + "</div>";
+}
 import { monthOptions } from "../../components/monthOptions.js";
 import { icons, avatar } from "../../components/icons.js";
 
@@ -36,7 +60,8 @@ function planFields(p, type, start) {
     '<div class="field pair">' +
       (type === "pack"
         ? '<div><label for="' + p + '_sessions">Sessions</label><input id="' + p + '_sessions" class="num" type="number" min="1" max="500" placeholder="e.g. 12" /></div>' +
-          '<div><label for="' + p + '_months">Valid for (months)</label><input id="' + p + '_months" class="num" type="number" min="0" max="36" placeholder="0 = no limit" /></div>'
+          '<div><label for="' + p + '_months">Valid for (months)</label><input id="' + p + '_months" class="num" type="number" min="0" max="36" placeholder="0 = no limit" /></div>' +
+          '</div><div class="field"><label for="' + p + '_used">Sessions already used</label><input id="' + p + '_used" class="num" type="number" min="0" max="499" placeholder="0 for a new pack" />'
         : '<div><label for="' + p + '_months">Months</label><input id="' + p + '_months" class="num" type="number" min="1" max="36" placeholder="e.g. 3" /></div>' +
           '<div><label for="' + p + '_start">Starts on</label><input id="' + p + '_start" type="date" value="' + esc(start) + '" /></div>') +
     "</div>" +
@@ -133,6 +158,7 @@ export function tabClients() {
       planFields("ca", type, today()) +
       '<div class="field"><label for="ca_notes">Notes (optional)</label><textarea id="ca_notes" rows="2" placeholder="Goals, injuries, preferred batch…"></textarea></div>' +
       '<div class="btnrow"><button class="btn go wide" data-act="cl-add">Add client</button></div></div>';
+    html += importCard();
     return html + msg();
   }
 

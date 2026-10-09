@@ -33,7 +33,7 @@ import { exportExcel } from "../domain/excel.js";
 import { requestLeave, cancelLeave, decideLeave, allLeaves } from "../domain/leave.js";
 import {
   toggleTick, addClient, updateClient, renewClient, setClientActive, reminderText, waLinkTo, clientPhone,
-  loadMonth, exportClientsExcel, today as clToday
+  loadMonth, exportClientsExcel, today as clToday, downloadTemplate, readImportFile, importClients
 } from "../domain/clients.js";
 import { dailyReport, weeklyReport, monthlyReport, leaveMessage } from "../domain/reports.js";
 import { shareWhatsApp, shareImage } from "../utils/whatsapp.js";
@@ -67,6 +67,13 @@ export function initEvents() {
   root.addEventListener("change", function (ev) {
     if (ev.target.id === "cl_month") { state.clMonth = ev.target.value; emitChange(); loadMonth(state.clMonth); }
     if (ev.target.id === "ca_type") { state.clAddType = ev.target.value; emitChange(); }
+    if (ev.target.id === "cl_file" && ev.target.files && ev.target.files[0]) {
+      var file = ev.target.files[0];
+      ev.target.value = "";                                   // allow choosing the same file again
+      state.clImport = null; state.clImportBusy = true; state.msg = ""; emitChange();
+      readImportFile(file).then(function (pv) { state.clImport = pv; state.clImportBusy = false; emitChange(); })
+        .catch(function (err) { state.clImportBusy = false; say(err.message); emitChange(); });
+    }
     if (ev.target.id === "cr_type") { state.clRenewType = ev.target.value; emitChange(); }
     if (ev.target.id === "p_month" || ev.target.id === "r_month") {
       state.month = ev.target.value; emitChange(); loadAdminData();
@@ -354,9 +361,9 @@ tasks: selectedTasks
     if (act === "cl-closeedit") { state.clEdit = null; state.clSub = "all"; state.msg = ""; emitChange(); return; }
     if (act === "cl-add") {
       try {
-        var nf = Object.assign({ type: $("ca_type").value, months: ($("ca_months") || {}).value, sessions: ($("ca_sessions") || {}).value, start: $("ca_start").value, amount: $("ca_amount").value, mode: $("ca_mode").value }, { name: $("ca_name").value, phone: $("ca_phone").value, notes: $("ca_notes").value });
+        var nf = Object.assign({ type: $("ca_type").value, months: ($("ca_months") || {}).value, sessions: ($("ca_sessions") || {}).value, usedBefore: ($("ca_used") || {}).value, start: $("ca_start").value, amount: $("ca_amount").value, mode: $("ca_mode").value }, { name: $("ca_name").value, phone: $("ca_phone").value, notes: $("ca_notes").value });
         addClient(nf).then(function (msg) {
-          clearFields(["ca_name", "ca_phone", "ca_notes", "ca_months", "ca_sessions", "ca_amount"]);
+          clearFields(["ca_name", "ca_phone", "ca_notes", "ca_months", "ca_sessions", "ca_used", "ca_amount"]);
           sayAndPaint(msg, true);
         }).catch(function (err) { say(err.message); });
       } catch (err) { say(err.message); }
@@ -364,7 +371,7 @@ tasks: selectedTasks
     }
     if (act === "cl-renew") {
       try {
-        renewClient(id, { type: $("cr_type").value, months: ($("cr_months") || {}).value, sessions: ($("cr_sessions") || {}).value, start: $("cr_start").value, amount: $("cr_amount").value, mode: $("cr_mode").value }).then(function (msg) {
+        renewClient(id, { type: $("cr_type").value, months: ($("cr_months") || {}).value, sessions: ($("cr_sessions") || {}).value, usedBefore: ($("cr_used") || {}).value, start: $("cr_start").value, amount: $("cr_amount").value, mode: $("cr_mode").value }).then(function (msg) {
           clearFields(["cr_months", "cr_sessions", "cr_amount"]);
           state.clRenewType = null; sayAndPaint(msg, true);
         }).catch(function (err) { say(err.message); });
@@ -391,6 +398,14 @@ tasks: selectedTasks
       var link = waLinkTo(clientPhone(id), reminderText(wc));
       var w = window.open(link, "_blank");
       if (w) { try { w.opener = null; } catch (e) {} } else window.location.href = link;
+      return;
+    }
+    if (act === "cl-template") { try { say(downloadTemplate(), true); } catch (err) { say(err.message); } return; }
+    if (act === "cl-import-cancel") { state.clImport = null; state.msg = ""; emitChange(); return; }
+    if (act === "cl-import") {
+      if (!state.clImport) return;
+      importClients(state.clImport).then(function (msg) { state.clImport = null; sayAndPaint(msg, true); })
+        .catch(function (err) { say(err.message); });
       return;
     }
     if (act === "cl-xlsx") {

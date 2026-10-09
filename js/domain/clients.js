@@ -85,7 +85,10 @@ export function makePlan(f) {
     if (n < 1 || n > 500) throw new Error("Sessions must be between 1 and 500.");
     var vm = Math.round(num(f.months, 0));
     if (vm < 0 || vm > 36) throw new Error("Validity must be 0–36 months (0 = no expiry date).");
+    var used = Math.round(num(f.usedBefore, 0));
+    if (used < 0 || used >= n) throw new Error("Sessions already used must be less than the pack size (" + n + ").");
     var p = { type: "pack", name: n + " sessions", start: start, sessions: n };
+    if (used) p.usedBefore = used;
     if (vm) { p.end = planEnd(start, vm); p.name += " · " + vm + " month" + (vm === 1 ? "" : "s"); }
     return p;
   }
@@ -97,7 +100,7 @@ export function makePlan(f) {
 /** Days `c` was ticked within its current plan. */
 export function usedSessions(c) {
   if (!c.plan) return 0;
-  var s = k8(c.plan.start), e = c.plan.end ? k8(c.plan.end) : "99999999", n = 0;
+  var s = k8(c.plan.start), e = c.plan.end ? k8(c.plan.end) : "99999999", n = c.plan.usedBefore || 0;
   Object.keys(state.clAtt || {}).forEach(function (d) {
     if (d >= s && d <= e && state.clAtt[d] && state.clAtt[d][c.id]) n++;
   });
@@ -179,16 +182,15 @@ function save(roster, priv, pay) {
   var paths = {};
   paths["kv/cl:roster"] = JSON.stringify(roster);
   paths["kv/cl:private"] = JSON.stringify(priv);
-  var payKey = null;
-  if (pay) {
-    payKey = "cl:pay:" + pay.date.slice(0, 7).replace("-", "");
-    return sget(payKey, true).then(function (list) {
-      list = (Array.isArray(list) ? list : []).concat([pay]);
-      paths["kv/" + payKey] = JSON.stringify(list);
-      return A().update(paths).then(function () { state.clPays[payKey] = list; });
-    });
-  }
-  return A().update(paths);
+  var pays = !pay ? [] : Array.isArray(pay) ? pay : [pay];
+  var byKey = {};
+  pays.forEach(function (x) { var k = "cl:pay:" + x.date.slice(0, 7).replace("-", ""); (byKey[k] = byKey[k] || []).push(x); });
+  var keys = Object.keys(byKey);
+  return Promise.all(keys.map(function (k) { return sget(k, true); })).then(function (lists) {
+    var merged = {};
+    keys.forEach(function (k, i) { merged[k] = (Array.isArray(lists[i]) ? lists[i] : []).concat(byKey[k]); paths["kv/" + k] = JSON.stringify(merged[k]); });
+    return A().update(paths).then(function () { keys.forEach(function (k) { state.clPays[k] = merged[k]; }); });
+  });
 }
 
 export function addClient(f) {
@@ -337,3 +339,114 @@ export function exportClientsExcel(ym) {
 }
 
 export function defaultMonth() { return ymKey(Date.now()); }
+
+/* ---------------------------------------------------------------
+   Excel import (Admin → Clients → Add → Import from Excel).
+   The file is read in the browser (SheetJS); it isn't uploaded anywhere.
+   Only the resulting client records are saved, in one all-or-nothing write.
+----------------------------------------------------------------*/
+
+export var IMPORT_HEADERS = ["Name", "Phone", "Plan type", "Months", "Sessions", "Sessions already used",
+                             "Start date", "Amount paid", "Paid by", "Paid on", "Notes"];
+var MAX_IMPORT = 1000;
+
+/** Download an empty template with two example rows. */
+export function downloadTemplate() {
+  if (typeof XLSX === "undefined") throw new Error("Excel library didn't load. Check the connection and reload.");
+  var rows = [IMPORT_HEADERS,
+    ["Ravi Kumar", "9876543210", "Months", 3, "", "", today(), 6000, "UPI", today(), "Prefers 6 AM"],
+    ["Priya S", "9123456780", "Sessions", 2, 12, 5, today(), 4000, "Cash", today(), "12-session pack, 5 already used"]];
+  var ws = XLSX.utils.aoa_to_sheet(rows);
+  ws["!cols"] = IMPORT_HEADERS.map(function (h) { return { wch: Math.max(12, h.length + 2) }; });
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Clients");
+  var help = XLSX.utils.aoa_to_sheet([
+    ["How to fill this in"],
+    ["Plan type: Months (ends on a date) or Sessions (a pack of visits)."],
+    ["Months: plan length for Months plans; for Sessions, how long the pack is valid (leave blank = no limit)."],
+    ["Sessions: pack size (Sessions plans only). Sessions already used: visits already used before today."],
+    ["Dates: 2026-10-09, 09-10-2026 or 09/10/2026 (day first)."],
+    ["Paid by: Cash, UPI, Card, Bank transfer or Other. Paid on: payment date (blank = start date)."],
+    ["Phone: 10-digit mobile (or with country code). Optional."]]);
+  XLSX.utils.book_append_sheet(wb, help, "Help");
+  XLSX.writeFile(wb, "clients-template.xlsx");
+  return "Template downloaded.";
+}
+
+function cell(row, names) {
+  for (var k in row) {
+    var key = String(k).trim().toLowerCase().replace(/[^a-z]/g, "");
+    if (names.indexOf(key) >= 0) return row[k];
+  }
+  return "";
+}
+/* Excel date cell, or "2026-10-09" / "09-10-2026" / "09/10/2026" (day first) -> "yyyy-mm-dd" */
+function toDateKey(v) {
+  if (v instanceof Date && !isNaN(v)) return dayKey(v.getTime() + 12 * 3600000);
+  var s = String(v == null ? "" : v).trim(), m;
+  if (!s) return "";
+  if ((m = /^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$/.exec(s))) return m[1] + "-" + pad2(m[2]) + "-" + pad2(m[3]);
+  if ((m = /^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})$/.exec(s))) return (m[3].length === 2 ? "20" + m[3] : m[3]) + "-" + pad2(m[2]) + "-" + pad2(m[1]);
+  return "bad";
+}
+function pad2(x) { x = String(+x); return x.length < 2 ? "0" + x : x; }
+function validDate(k) { var d = new Date(k + "T00:00:00"); return !isNaN(d) && dayKey(d.getTime()) === k; }
+
+/** Read an uploaded File -> Promise<{ fileName, items: [{ row, name, ok, error, client, priv, pay }] }> */
+export function readImportFile(file) {
+  if (typeof XLSX === "undefined") return Promise.reject(new Error("Excel library didn't load. Check the connection and reload."));
+  if (file.size > 5 * 1024 * 1024) return Promise.reject(new Error("That file is too big (over 5 MB)."));
+  return file.arrayBuffer().then(function (buf) {
+    var wb = XLSX.read(buf, { type: "array", cellDates: true });
+    var ws = wb.Sheets[wb.SheetNames[0]];
+    var rows = XLSX.utils.sheet_to_json(ws, { defval: "", raw: true });
+    if (!rows.length) throw new Error("No rows found. Use the template's first sheet, with the headings in row 1.");
+    if (rows.length > MAX_IMPORT) throw new Error("That's " + rows.length + " rows — import at most " + MAX_IMPORT + " at a time.");
+    var seen = {};
+    state.clients.forEach(function (c) { if (c.active !== false) seen[c.name.toLowerCase()] = "already a client"; });
+    var items = rows.map(function (r, i) {
+      var it = { row: i + 2, name: String(cell(r, ["name", "clientname", "fullname"]) || "").trim() };
+      try {
+        if (!it.name) throw new Error("No name");
+        if (it.name.length > 80) throw new Error("Name too long");
+        var dupe = seen[it.name.toLowerCase()];
+        if (dupe) throw new Error("Duplicate — " + dupe);
+        var rawType = String(cell(r, ["plantype", "type", "plan"]) || "").trim().toLowerCase();
+        var sessions = cell(r, ["sessions", "sessionpack", "packsize", "totalsessions"]);
+        var type = /sess|pack|visit/.test(rawType) ? "pack" : /month|time|period/.test(rawType) ? "time" : (String(sessions).trim() ? "pack" : "time");
+        var start = toDateKey(cell(r, ["startdate", "start", "from", "joiningdate", "joined"]));
+        if (!start) throw new Error("No start date");
+        if (start === "bad" || !validDate(start)) throw new Error("Start date not understood");
+        var plan = makePlan({ type: type, months: cell(r, ["months", "duration", "validity", "validitymonths"]), sessions: sessions,
+                              usedBefore: cell(r, ["sessionsalreadyused", "alreadyused", "usedsessions", "used"]), start: start });
+        var phone = cleanPhone(String(cell(r, ["phone", "mobile", "whatsapp", "phonenumber", "contact"]) || "").replace(/\.0$/, ""));
+        var paidOn = toDateKey(cell(r, ["paidon", "paymentdate", "paiddate"]));
+        if (paidOn === "bad" || (paidOn && !validDate(paidOn))) throw new Error("Paid-on date not understood");
+        var mode = String(cell(r, ["paidby", "mode", "paymentmode", "paymenttype"]) || "").trim();
+        var modeOk = PAY_MODES.filter(function (m) { return m.toLowerCase() === mode.toLowerCase(); })[0] || (mode ? "Other" : "Cash");
+        var c = { id: uid(), name: it.name, active: true, joined: start < today() ? start : today(), plan: plan };
+        it.client = c;
+        it.priv = { phone: phone, notes: String(cell(r, ["notes", "note", "remarks", "comments"]) || "").trim().slice(0, 500), history: [] };
+        it.pay = payRecord(c, plan, { amount: cell(r, ["amountpaid", "amount", "paid", "fee", "fees"]), mode: modeOk, payDate: paidOn || start });
+        it.ok = true;
+        seen[it.name.toLowerCase()] = "repeated in this file (row " + it.row + ")";
+      } catch (e) { it.ok = false; it.error = e.message; }
+      return it;
+    });
+    return { fileName: file.name, items: items };
+  });
+}
+
+/** Save every OK row of a previewed import in one write. */
+export function importClients(preview) {
+  var ok = preview.items.filter(function (it) { return it.ok; });
+  if (!ok.length) return Promise.reject(new Error("Nothing to import — fix the rows marked with a problem first."));
+  var roster = state.clients.concat(ok.map(function (it) { return it.client; }));
+  var priv = Object.assign({}, state.clientPriv);
+  ok.forEach(function (it) { priv[it.client.id] = it.priv; });
+  var pays = ok.map(function (it) { return it.pay; }).filter(Boolean);
+  return save(roster, priv, pays).then(function () {
+    state.clients = roster; state.clientPriv = priv; watchTicks(); emitChange();
+    return ok.length + " client" + (ok.length === 1 ? "" : "s") + " imported" + (pays.length ? " · " + pays.length + " payment" + (pays.length === 1 ? "" : "s") + " recorded." : ".");
+  });
+}

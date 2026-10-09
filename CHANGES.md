@@ -795,3 +795,27 @@ Tests: 46 new (clients.test.js) — validation, renewals, WhatsApp link,
 coach ticks, direct database attacks by a coach and by a stranger, session
 counting, renew + history + payments, reports, Excel, outside-the-gym lock,
 320 px layout; all other suites re-run (246 checks total).
+
+## 2026-10-09 — Import clients from Excel (v27)
+
+Admin → Clients → Add → **Import from Excel**: download the template
+(Name, Phone, Plan type, Months, Sessions, Sessions already used, Start date,
+Amount paid, Paid by, Paid on, Notes + a Help sheet), fill it, choose the
+file. A preview marks every row OK or explains the problem (no name, bad
+phone, missing/invalid date, too many sessions used, already a client,
+repeated in the file); nothing is saved until **Import**. OK rows are saved
+in one write; payments are filed under their "Paid on" month (or the start
+date). Dates: Excel date cells, yyyy-mm-dd, or day-first dd-mm-yyyy /
+dd/mm/yyyy. Headings are matched loosely (e.g. "Mobile" = Phone). Max
+1,000 rows / 5 MB. The file is read in the browser — not uploaded.
+
+Also: **Sessions already used** on session packs (Add form, Renew, import),
+for clients part-way through a pack; and a layout fix for list rows with
+no buttons (details were squeezed onto one line).
+
+Known limitation: the Excel library is SheetJS 0.18.5 from cdnjs (the last
+version published there), which has a published prototype-pollution issue
+when reading crafted files (CVE-2023-30533). Only admins import, from files
+they choose; noted for a future upgrade to a self-hosted newer SheetJS.
+
+Tests: 25 new (import.test.js); clients, checklist, security re-run.

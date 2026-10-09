@@ -4,7 +4,7 @@ import { state } from "../../../core/store.js";
 import { esc, shortDate } from "../../../utils/format.js";
 import { money } from "../../../domain/payroll.js";
 import { clientStatus, clientPhone, usedSessions, suggestedStart, today, monthReport, PAY_MODES, importable, clientLedger,
-         filterClients, planNames, lastVisits, DEFAULT_FILTER, packages, packageById, packageValidity } from "../../../domain/clients.js";
+         filterClients, planNames, lastVisits, DEFAULT_FILTER, packages, packageById, packageValidity, accountsToAdd, accountsMonths } from "../../../domain/clients.js";
 
 function opt(v, label, cur) { return '<option value="' + esc(v) + '"' + (v === cur ? " selected" : "") + ">" + esc(label) + "</option>"; }
 
@@ -88,6 +88,45 @@ function registerPreview(pv) {
     '<button class="btn quiet" data-act="cl-import-cancel">Cancel</button></div>';
 }
 
+/* Preview for a hand-kept accounts book (one sheet per month). */
+function accountsPreview(pv) {
+  var by = function (a) { return pv.items.filter(function (it) { return it.action === a; }); };
+  var skip = by("skip"), bad = by("problem");
+  var cand = pv.items.filter(function (it) { return it.action === "pay" || it.action === "new"; });
+  var sure = cand.filter(function (it) { return !it.uncertain; }), unsure = cand.filter(function (it) { return it.uncertain; });
+  var take = accountsToAdd(pv);
+  var sum = function (l) { return l.reduce(function (s, it) { return s + it.amount; }, 0); };
+  var last = pv.lastRecorded ? shortDate(pv.lastRecorded) + " " + pv.lastRecorded.slice(0, 4) : "";
+  var row = function (it) {
+    var tag = it.action === "problem" ? '<span class="tag">not a payment</span>' : it.action === "skip" ? '<span class="tag">already recorded</span>'
+      : it.uncertain && !pv.includeEarlier ? '<span class="tag">left out</span>' : it.action === "new" ? '<span class="tag pending">new client</span>' : '<span class="tag on">new payment</span>';
+    var what = it.action === "problem" ? it.error
+      : it.action === "skip" ? "Matches a recorded payment of " + (it.client ? it.client.name : "")
+      : it.action === "new" ? "New client · " + (it.pkg ? it.pkg.name : (it.plan ? "plan “" + it.plan + "” — 1 month assumed" : "no plan — 1 month assumed"))
+      : (it.renew ? "Renews " : "Payment for ") + (it.client ? it.client.name : it.fresh.client.name) + (it.renew && it.pkg ? " · " + it.pkg.name : "");
+    return '<div class="row"><span><span class="who">' + esc(it.name || "(no name)") + "</span>" + tag +
+      '<br><span class="meta">' + esc(it.sheet + " · " + (it.date ? shortDate(it.date) + (it.guessed ? " (date from sheet)" : "") + " · " : "") + (it.amount ? money(it.amount) + " · " : "") + what) + "</span></span></div>";
+  };
+  return '<div class="import-sum"><b>' + esc(pv.fileName) + "</b><br>Accounts book: " + pv.items.length + " rows<br>" +
+      '<span class="tag on">' + sure.length + " new after " + esc(last) + " · " + money(sum(sure)) + "</span>" +
+      '<span class="tag">' + skip.length + " already recorded</span>" +
+      (unsure.length ? '<span class="tag pending">' + unsure.length + " uncertain · " + money(sum(unsure)) + "</span>" : "") +
+      (bad.length ? '<span class="tag">' + bad.length + " not payments</span>" : "") + "</div>" +
+    '<p class="note" style="margin-top:0">Your main records already run to <b>' + esc(last) + "</b>. Payments after that are added. " +
+      "Earlier payments that don't match a recorded one exactly are usually the same money recorded differently (another date, instalments, a different spelling), so they're left out unless you tick below.</p>" +
+    (unsure.length ? '<h3 style="margin-top:14px">Earlier months — book vs your records</h3>' +
+      '<p class="note" style="margin-top:2px">Tick a month only if your records are missing payments for it (for example, the book has clearly more). Otherwise they\'d be counted twice.</p>' +
+      accountsMonths(pv).filter(function (o) { return o.unsureN; }).map(function (o) {
+        var gap = o.book - o.recorded;
+        return '<label class="check month-pick"><input type="checkbox" class="cl_incl_month" data-sheet="' + esc(o.sheet) + '"' + ((pv.includeMonths || {})[o.sheet] ? " checked" : "") + " />" +
+          "<div>" + esc(o.sheet) + ": add " + o.unsureN + " unmatched (" + money(o.unsureT) + ")" +
+          "<span>Book " + money(o.book) + " · your records " + money(o.recorded) + (gap > 0 ? " · book has " + money(gap) + " more" : " · records already have as much or more") + "</span></div></label>";
+      }).join("") : "") +
+    '<div class="rows import-rows" style="margin-top:10px">' + sure.concat(unsure, bad, skip).slice(0, 300).map(row).join("") + "</div>" +
+    '<div class="btnrow"><button class="btn go" data-act="cl-import"' + (take.length ? "" : " disabled") + ">Add " + take.length + " item" + (take.length === 1 ? "" : "s") + " · " + money(sum(take)) + "</button>" +
+    '<button class="btn quiet" data-act="cl-import-cancel">Cancel</button></div>';
+}
+
 function importCard() {
   var pv = state.clImport;
   var html = '<div class="card"><h3>Import from Excel</h3>' +
@@ -96,6 +135,7 @@ function importCard() {
     '<label class="btn go file-btn">' + icons.login + 'Choose file<input id="cl_file" type="file" accept=".xlsx,.xls,.csv" /></label></div>';
   if (state.clImportBusy) html += '<div class="loading" style="margin-top:12px">Reading the file…</div>';
   if (pv && pv.kind === "register") return html + registerPreview(pv) + "</div>";
+  if (pv && pv.kind === "accounts") return html + accountsPreview(pv) + "</div>";
   if (pv) {
     var ok = pv.items.filter(function (it) { return it.ok; }), bad = pv.items.filter(function (it) { return !it.ok; });
     html += '<div class="import-sum"><b>' + esc(pv.fileName) + '</b><br>' +

@@ -640,6 +640,12 @@ export function readImportFile(file) {
   if (file.size > 5 * 1024 * 1024) return Promise.reject(new Error("That file is too big (over 5 MB)."));
   return file.arrayBuffer().then(function (buf) {
     var wb = XLSX.read(buf, { type: "array", cellDates: true });
+    if (isAccountsBook(wb)) {
+      return loadAllPayments().then(function () {
+        var items = parseAccountsBook(wb);
+        return { fileName: file.name, kind: "accounts", items: items, lastRecorded: items.lastRecorded, includeEarlier: false };
+      });
+    }
     var ws = wb.Sheets[wb.SheetNames[0]];
     var rows = XLSX.utils.sheet_to_json(ws, { defval: "", raw: true });
     if (!rows.length) throw new Error("No rows found. Use the template's first sheet, with the headings in row 1.");
@@ -902,4 +908,233 @@ export function exportFullHistory() {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(pays), "Payments");
   XLSX.writeFile(wb, "clients-full-history-" + today() + ".xlsx");
   return "Full history downloaded.";
+}
+
+/* ---------------------------------------------------------------
+   Hand-kept accounts book: one sheet per month (April, May, …), rows of
+   Name / Number / Plan / Amount / Date / Remarks / New-Renewal (headings
+   may be missing, misspelt — "Numbner" — or start a few rows down).
+   Used to ADD what the main records lack, never to double-count:
+   - a payment is "already recorded" if the same client (by phone, else by
+     name) has a payment of the same amount within ±15 days (or in the same
+     month when the book has no date);
+   - a new payment for an existing client is added; if it's after their
+     current plan started and its package is clear, it renews them;
+   - an unknown client is added with the package their plan code + amount
+     point to.
+----------------------------------------------------------------*/
+var MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+
+function isAccountsBook(wb) {
+  var monthSheets = wb.SheetNames.filter(function (n) { return MONTHS.indexOf(String(n).trim().toLowerCase()) >= 0; });
+  return monthSheets.length >= 2;
+}
+
+/* Plan code + amount -> a package, e.g. "1M 6D", "3M - 3D", "1Y", "M", "Y", "6M". */
+function packageFor(code, amount) {
+  var c = String(code || "").toUpperCase().replace(/\s+/g, "");
+  var months = /^(\d+)M/.test(c) ? +/^(\d+)M/.exec(c)[1] : /^(\d+)Y/.test(c) ? 12 * +/^(\d+)Y/.exec(c)[1] : c === "M" ? 1 : c === "Y" ? 12 : 0;
+  var days = /6D/.test(c) ? 6 : /3D/.test(c) ? 3 : 0;
+  var list = packages().filter(function (k) { return k.type === "time"; });
+  var label = function (k) { var m = /^(\d+)M/.exec(k.name); return m ? +m[1] : 0; };
+  var dpw = function (k) { return /6 days/.test(k.name) ? 6 : /3 days/.test(k.name) ? 3 : 0; };
+  var cands = list.filter(function (k) { return (!months || label(k) === months) && (!days || dpw(k) === days); });
+  var exact = cands.filter(function (k) { return Math.abs(k.fee - amount) < 1; });
+  if (exact.length === 1) return exact[0];
+  if (cands.length === 1 && (months || days)) return cands[0];
+  var byFee = list.filter(function (k) { return Math.abs(k.fee - amount) < 1 && (!months || label(k) === months); });
+  return byFee.length === 1 ? byFee[0] : null;
+}
+
+function bookDate(v, sheetMonth, year) {
+  var y, mo, d, m;
+  if (v instanceof Date && !isNaN(v)) { var x = new Date(v.getTime() + 12 * 3600000); y = x.getFullYear(); mo = x.getMonth() + 1; d = x.getDate(); }
+  else {
+    var s = String(v == null ? "" : v).trim();
+    if ((m = /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,5})$/.exec(s))) { d = +m[1]; mo = +m[2]; y = m[3].length === 2 ? 2000 + +m[3] : +m[3]; }
+    else if ((m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s))) { y = +m[1]; mo = +m[2]; d = +m[3]; }
+  }
+  var want = sheetMonth + 1, near = function (a) { var diff = Math.abs(a - want); return Math.min(diff, 12 - diff) <= 1; };
+  if (mo) {
+    if (!/^20\d\d$/.test(String(y))) y = year;                       // typos like "20206"
+    if (mo !== want && d <= 12 && d === want) { var t = d; d = mo; mo = t; }   // written month-first
+    var k = y + "-" + pad2(mo) + "-" + pad2(d);
+    if (validDate(k) && near(mo)) return { k: k };
+  }
+  return { k: year + "-" + pad2(want) + "-01", guessed: true };
+}
+
+function parseAccountsBook(wb) {
+  // year: the most common year among real dates in the book
+  var yc = {};
+  wb.SheetNames.forEach(function (n) {
+    XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: "", raw: true }).forEach(function (r) {
+      r.forEach(function (c) { if (c instanceof Date && !isNaN(c)) { var y = c.getFullYear(); yc[y] = (yc[y] || 0) + 1; } });
+    });
+  });
+  var year = +(Object.keys(yc).sort(function (a, b) { return yc[b] - yc[a]; })[0] || today().slice(0, 4));
+
+  // who we already know (by phone, then name) and their payments
+  var byPhone = {}, byName = {};
+  state.clients.forEach(function (c) {
+    var ph = ((state.clientPriv || {})[c.id] || {}).phone;
+    if (ph) byPhone[ph.replace(/\D/g, "").slice(-10)] = c;
+    byName[c.name.toLowerCase().replace(/\s*\(·\d{4}\)$/, "").trim()] = byName[c.name.toLowerCase().replace(/\s*\(·\d{4}\)$/, "").trim()] || c;
+  });
+  var paysOf = {};
+  Object.keys(state.clPays || {}).forEach(function (k) { (state.clPays[k] || []).forEach(function (p) { (paysOf[p.clientId] = paysOf[p.clientId] || []).push({ amount: p.amount, date: p.date }); }); });
+  var lastRecorded = "";
+  Object.keys(state.clPays || {}).forEach(function (k) { (state.clPays[k] || []).forEach(function (p) { if (p.date > lastRecorded) lastRecorded = p.date; }); });
+  var newByKey = {};          // new clients created from this book (later rows join them)
+  var items = [];
+
+  wb.SheetNames.forEach(function (sheet) {
+    var mi = MONTHS.indexOf(String(sheet).trim().toLowerCase());
+    if (mi < 0) return;
+    var rows = XLSX.utils.sheet_to_json(wb.Sheets[sheet], { header: 1, defval: "", raw: true });
+    var h = rows.findIndex(function (r) { return r.some(function (c) { return /^name$/i.test(String(c).trim()); }); });
+    var col = {};
+    if (h >= 0) rows[h].forEach(function (c, i) {
+      var k = String(c).trim().toLowerCase().replace(/[^a-z]/g, "");
+      if (k === "name" && col.name === undefined) col.name = i;
+      else if (/^(number|numbner|phone|mobile|contact)$/.test(k)) col.phone = i;
+      else if (k === "plan") col.plan = i;
+      else if (k === "amount") col.amount = i;
+      else if (k === "date") col.date = i;
+      else if (k === "remarks") col.remarks = i;
+    });
+    rows.slice(h + 1).forEach(function (r, i) {
+      var rowNo = h + 2 + i;
+      var name, phone = "", plan = "", amount, dv, remarks = "";
+      if (h >= 0) {
+        name = String(r[col.name] || "").trim(); phone = String(col.phone !== undefined ? r[col.phone] : "").replace(/\.0$/, "").trim();
+        plan = String(col.plan !== undefined ? r[col.plan] : "").trim(); amount = +r[col.amount] || 0; dv = r[col.date];
+        remarks = String(col.remarks !== undefined ? r[col.remarks] : "").trim();
+      } else {                                             // no heading row: first text = name, first number = amount, first date = date
+        var cells = r.filter(function (c) { return String(c).trim() !== ""; });
+        name = String(cells.filter(function (c) { return typeof c === "string" && /[a-z]/i.test(c); })[0] || "").trim();
+        amount = +(cells.filter(function (c) { return typeof c === "number"; })[0] || 0);
+        dv = cells.filter(function (c) { return c instanceof Date; })[0] || "";
+      }
+      if (!name && !amount) return;
+      var it = { sheet: sheet, row: rowNo, name: name, amount: amount, plan: plan };
+      if (!name) { it.action = "problem"; it.error = "No name (a total row?)"; items.push(it); return; }
+      if (!/[a-z]/i.test(name) || /^plan$/i.test(plan) && !amount) { it.action = "problem"; it.error = "Not a payment row"; items.push(it); return; }
+      if (!(amount > 0)) { it.action = "problem"; it.error = "No amount"; items.push(it); return; }
+      var d = bookDate(dv, mi, year);
+      it.date = d.k; it.guessed = !!d.guessed;
+      var ph10 = ""; try { ph10 = cleanPhone(phone).replace(/\D/g, "").slice(-10); } catch (e) { ph10 = ""; }
+      var nm = name.toLowerCase().trim();
+      var client = (ph10 && byPhone[ph10]) || byName[nm] || null;
+      var fresh = !client && (newByKey[ph10 ? "p" + ph10 : "n" + nm] || null);
+      var pkg = packageFor(plan, amount);
+      it.pkgName = pkg ? pkg.name : (plan || "");
+      if (client) {
+        /* One-to-one: the nearest not-yet-matched recorded payment of the same
+           amount within 45 days (the book's date and the invoice date often
+           differ by weeks). Each recorded payment can match only one row, so
+           a monthly payer's consecutive months don't collapse into one. */
+        var best = null, bestGap = Infinity;
+        (paysOf[client.id] || []).forEach(function (p) {
+          if (p._used || Math.abs(p.amount - amount) >= 1) return;
+          var gap = Math.abs(new Date(p.date + "T00:00:00") - new Date(it.date + "T00:00:00")) / DAY;
+          if (it.guessed) gap = Math.max(0, gap - 30);           // date only known to the month
+          /* after the last recorded payment, only allow small date slips: a
+             same-amount payment a month later is a new month's payment */
+          var limit = lastRecorded && it.date > lastRecorded ? 7 : 45;
+          if (gap <= limit && gap < bestGap) { best = p; bestGap = gap; }
+        });
+        if (best) { best._used = true; it.action = "skip"; it.client = client; items.push(it); return; }
+        it.action = "pay"; it.client = client;
+        it.renew = !!(pkg && client.plan && !it.guessed && it.date > client.plan.start && (!client.plan.end || it.date >= addDays(client.plan.end, -15)));
+        it.pkg = pkg; it.ph = ph10; it.remarks = remarks;
+        (paysOf[client.id] = paysOf[client.id] || []).push({ amount: amount, date: it.date, _used: true });
+        items.push(it); return;
+      }
+      if (fresh) {                                         // a later payment by someone this book already adds
+        it.action = "pay"; it.fresh = fresh; it.pkg = pkg; it.remarks = remarks;
+        it.renew = !!(pkg && !it.guessed && it.date > fresh.client.plan.start);
+        items.push(it); return;
+      }
+      it.action = "new"; it.pkg = pkg; it.ph = ph10; it.phoneRaw = phone; it.remarks = remarks;
+      it.client = { id: uid(), name: name.slice(0, 80), active: true, joined: it.date < today() ? it.date : today(), plan: null };
+      newByKey[ph10 ? "p" + ph10 : "n" + nm] = it;
+      items.push(it);
+    });
+  });
+  /* Before the last recorded payment, an unmatched row may still be a payment
+     already recorded differently (other date, instalments, other spelling):
+     flag it so the preview leaves it out unless the owner opts in. */
+  items.forEach(function (it) { if ((it.action === "pay" || it.action === "new") && lastRecorded && it.date <= lastRecorded) it.uncertain = true; });
+  items.lastRecorded = lastRecorded;
+  return items;
+}
+
+/** Rows an accounts-book import will add, given the preview's choices. */
+export function accountsToAdd(preview) {
+  var inc = preview.includeMonths || {};
+  return preview.items.filter(function (it) { return (it.action === "pay" || it.action === "new") && (!it.uncertain || preview.includeEarlier || inc[it.sheet]); });
+}
+
+/** Per sheet: book total, recorded total for that month, and the unmatched (uncertain) part. */
+export function accountsMonths(preview) {
+  var out = [], seen = {};
+  preview.items.forEach(function (it) {
+    if (it.action === "problem" || !it.date) return;
+    var o = seen[it.sheet];
+    if (!o) { o = seen[it.sheet] = { sheet: it.sheet, ym: it.date.slice(0, 7), book: 0, unsureN: 0, unsureT: 0 }; out.push(o); }
+    o.book += it.amount;
+    if (it.uncertain) { o.unsureN++; o.unsureT += it.amount; }
+  });
+  out.forEach(function (o) {
+    o.recorded = ((state.clPays || {})["cl:pay:" + o.ym.replace("-", "")] || []).reduce(function (s, p) { return s + p.amount; }, 0);
+  });
+  return out;
+}
+
+function planFromPkg(pkg, start, fallbackName) {
+  if (pkg) return makePlan({ pkg: pkg.id, start: start });
+  return { type: "time", name: fallbackName ? "From accounts: " + fallbackName : "From accounts book", start: start, end: planEnd(start, 1) };
+}
+
+/** Save an accounts-book import in one write. */
+export function importAccounts(preview) {
+  var roster = state.clients.map(function (c) { return Object.assign({}, c); });
+  var priv = JSON.parse(JSON.stringify(state.clientPriv || {}));
+  var pays = [], added = 0, renewed = 0;
+  var find = function (id) { return roster.filter(function (c) { return c.id === id; })[0]; };
+  var take = accountsToAdd(preview);
+  /* a later row may pay for a client added by an earlier row — only if that row is being added too */
+  take = take.filter(function (it) { return !it.fresh || take.indexOf(it.fresh) >= 0; });
+  take.forEach(function (it) {
+    if (it.action === "new") {
+      var c = Object.assign({}, it.client, { plan: planFromPkg(it.pkg, it.date, it.plan) });
+      var phone = ""; try { phone = cleanPhone(it.phoneRaw); } catch (e) {}
+      roster.push(c); added++;
+      priv[c.id] = { phone: phone, notes: ["Added from accounts book (" + it.sheet + ")" + (it.guessed ? " — start date guessed from the sheet's month" : ""), it.remarks].filter(Boolean).join(" · "), history: [] };
+      pays.push(payFor(c, c.plan, it));
+    } else if (it.action === "pay") {
+      var tgt = it.client ? find(it.client.id) : find(it.fresh.client.id);
+      if (!tgt) return;
+      if (it.renew) {
+        var np = planFromPkg(it.pkg, it.date, it.plan);
+        var pv = priv[tgt.id] = priv[tgt.id] || { phone: "", notes: "", history: [] };
+        if (tgt.plan) pv.history = (pv.history || []).concat([Object.assign({ used: usedSessions(tgt) }, tgt.plan)]).slice(-50);
+        tgt.plan = np; tgt.active = true; renewed++;
+        pays.push(payFor(tgt, np, it));
+      } else {
+        pays.push(payFor(tgt, tgt.plan || { name: it.pkgName || "Payment", start: it.date }, it));
+      }
+    }
+  });
+  if (!pays.length && !added) return Promise.reject(new Error("Nothing new to add — everything in this file is already recorded."));
+  return save(roster, priv, pays).then(function () {
+    state.clients = roster; state.clientPriv = priv; watchTicks(); emitChange();
+    return pays.length + " payment" + (pays.length === 1 ? "" : "s") + " added" + (added ? " · " + added + " new client" + (added === 1 ? "" : "s") : "") + (renewed ? " · " + renewed + " renewal" + (renewed === 1 ? "" : "s") : "") + ".";
+  });
+}
+
+function payFor(c, plan, it) {
+  return { id: uid(), clientId: c.id, name: c.name, plan: plan.name, start: plan.start || null, end: plan.end || null,
+           amount: Math.round(it.amount * 100) / 100, mode: "Cash", date: it.date, by: "Accounts book · " + it.sheet + (it.guessed ? " (date from sheet)" : ""), at: Date.now() };
 }

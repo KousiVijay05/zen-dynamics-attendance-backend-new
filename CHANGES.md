@@ -918,3 +918,24 @@ re-run: 326 checks.
 Tests: packages.test.js (27); all suites re-run on fresh emulators
 (packages 27, sessions 30, clients 61, import 25, security 73, checklist 77,
 live 12, whatsapp 10, image 14, leavesite 14, unit 14 = 363).
+
+## 2026-10-10 — Import a hand-kept accounts book (v32)
+
+- **Clients → Add → Import** now recognises an accounts book (one sheet per
+  month, e.g. `ZnD_Accounts.xlsx`) as well as the sales register and the
+  template.
+- **Only what the register lacks.** Each book row is matched one-to-one
+  against payments already recorded for that client, same amount, within
+  45 days. Rows dated after the last recorded payment are added by default.
+  Earlier unmatched rows are left out unless you tick that month. Each
+  month shows the book total next to your records, so you can see where
+  money is actually missing.
+- Dates are read to fit the sheet's month: month-first dates are swapped,
+  and year typos are fixed. A cell that can't be read uses the 1st of the
+  sheet's month and is marked "date from sheet".
+- Package codes and amounts map to the built-in membership packages. New
+  names become new clients, and package payments renew the plan.
+- Importing the same book twice adds nothing.
+- Tested locally with the real files (counts only, data wiped). All of
+  October (₹66,700) is added as new. September's unmatched ₹37,200 is
+  opt-in, and the book shows ₹45,200 more than the register for that month.

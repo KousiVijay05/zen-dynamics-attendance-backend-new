@@ -35,7 +35,7 @@ import {
   addClient, updateClient, renewClient, setClientActive, reminderText, waLinkTo, clientPhone,
   startSession, discardSession, togglePick, submitSession, voidMark, markToday, canVoid, filterClients, exportFiltered, DEFAULT_FILTER,
   loadMonth, exportClientsExcel, today as clToday, downloadTemplate, readImportFile, importClients,
-  loadAllPayments, exportFullHistory
+  loadAllPayments, exportFullHistory, importAccounts
 } from "../domain/clients.js";
 import { dailyReport, weeklyReport, monthlyReport, leaveMessage } from "../domain/reports.js";
 import { shareWhatsApp, shareImage } from "../utils/whatsapp.js";
@@ -73,6 +73,10 @@ export function initEvents() {
     if (ev.target.id === "cr_pkg") { state.clRenewPkg = ev.target.value; emitChange(); }
     var fm = /^clf_(status|window|seen|plan|balance|sort)$/.exec(ev.target.id);
     if (fm) { state.clFilter = Object.assign({}, state.clFilter); state.clFilter[fm[1]] = ev.target.value; emitChange(); }
+    if (ev.target.classList && ev.target.classList.contains("cl_incl_month") && state.clImport) {
+      state.clImport.includeMonths = Object.assign({}, state.clImport.includeMonths);
+      state.clImport.includeMonths[ev.target.getAttribute("data-sheet")] = ev.target.checked; emitChange();
+    }
     if (ev.target.id === "cl_incl_ended" && state.clImport) { state.clImport.includeEnded = ev.target.checked; emitChange(); }
     if (ev.target.id === "cl_file" && ev.target.files && ev.target.files[0]) {
       var file = ev.target.files[0];
@@ -461,7 +465,7 @@ tasks: selectedTasks
     if (act === "cl-import-cancel") { state.clImport = null; state.msg = ""; emitChange(); return; }
     if (act === "cl-import") {
       if (!state.clImport) return;
-      importClients(state.clImport).then(function (msg) { state.clImport = null; sayAndPaint(msg, true); })
+      (state.clImport.kind === "accounts" ? importAccounts(state.clImport) : importClients(state.clImport)).then(function (msg) { state.clImport = null; sayAndPaint(msg, true); })
         .catch(function (err) { say(err.message); });
       return;
     }

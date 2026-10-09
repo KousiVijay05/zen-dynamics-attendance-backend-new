@@ -819,3 +819,29 @@ when reading crafted files (CVE-2023-30533). Only admins import, from files
 they choose; noted for a future upgrade to a self-hosted newer SheetJS.
 
 Tests: 25 new (import.test.js); clients, checklist, security re-run.
+
+## 2026-10-09 — Import sales-register exports from other gym software (v28)
+
+The importer now recognises a **sales register** export (one row per
+invoice: Customer ID, Customer Name, Customer Phone No., Plan Name, Start
+Date, End Date, Plan Status, Paid Amount, Payment Type, Invoice Date…), such
+as the owner's previous software produces. Per customer:
+- plan = the one running today, else the next one paid in advance, else the
+  most recent — with the file's exact start/end dates and plan name
+  ("FT - 3 Month - 6 Days"); "N sessions" plans become session packs;
+- other plans -> history; cancelled (CN) invoices ignored;
+- every paid invoice -> a payment on its invoice date (Cash / UPI; Online and
+  others -> Other), so past months' collection reports are right;
+- an unpaid balance on the chosen plan is noted on the client;
+- duplicates are matched by phone; different people sharing a name get the
+  last 4 digits of their phone added ("Ravi Kumar (·3210)").
+The preview shows current / starting later / plan ended / problems, with an
+option to leave out clients whose plan has ended.
+
+Renewals → "Expired" now lists clients who expired in the last 60 days;
+older ones are counted and remain in Clients.
+
+Verified with the owner's real export on the LOCAL emulator only (data wiped
+afterwards): 307 invoices → 175 clients, 296 payments, ₹24,06,202, matching
+the file month by month for all 26 months; re-import adds nothing.
+Regression: import (25), clients (46).

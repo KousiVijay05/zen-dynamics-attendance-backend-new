@@ -67,6 +67,7 @@ export function initEvents() {
   root.addEventListener("change", function (ev) {
     if (ev.target.id === "cl_month") { state.clMonth = ev.target.value; emitChange(); loadMonth(state.clMonth); }
     if (ev.target.id === "ca_type") { state.clAddType = ev.target.value; emitChange(); }
+    if (ev.target.id === "cl_incl_ended" && state.clImport) { state.clImport.includeEnded = ev.target.checked; emitChange(); }
     if (ev.target.id === "cl_file" && ev.target.files && ev.target.files[0]) {
       var file = ev.target.files[0];
       ev.target.value = "";                                   // allow choosing the same file again

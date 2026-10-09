@@ -402,6 +402,7 @@ export function readImportFile(file) {
     var rows = XLSX.utils.sheet_to_json(ws, { defval: "", raw: true });
     if (!rows.length) throw new Error("No rows found. Use the template's first sheet, with the headings in row 1.");
     if (rows.length > MAX_IMPORT) throw new Error("That's " + rows.length + " rows — import at most " + MAX_IMPORT + " at a time.");
+    if (isRegister(rows)) return { fileName: file.name, kind: "register", items: parseRegister(rows) };
     var seen = {};
     state.clients.forEach(function (c) { if (c.active !== false) seen[c.name.toLowerCase()] = "already a client"; });
     var items = rows.map(function (r, i) {
@@ -439,14 +440,140 @@ export function readImportFile(file) {
 
 /** Save every OK row of a previewed import in one write. */
 export function importClients(preview) {
-  var ok = preview.items.filter(function (it) { return it.ok; });
+  var ok = importable(preview);
   if (!ok.length) return Promise.reject(new Error("Nothing to import — fix the rows marked with a problem first."));
   var roster = state.clients.concat(ok.map(function (it) { return it.client; }));
   var priv = Object.assign({}, state.clientPriv);
   ok.forEach(function (it) { priv[it.client.id] = it.priv; });
-  var pays = ok.map(function (it) { return it.pay; }).filter(Boolean);
+  var pays = [];
+  ok.forEach(function (it) { (it.pays || [it.pay]).forEach(function (x) { if (x) pays.push(x); }); });
   return save(roster, priv, pays).then(function () {
     state.clients = roster; state.clientPriv = priv; watchTicks(); emitChange();
     return ok.length + " client" + (ok.length === 1 ? "" : "s") + " imported" + (pays.length ? " · " + pays.length + " payment" + (pays.length === 1 ? "" : "s") + " recorded." : ".");
   });
+}
+
+/** Rows that will be imported (register imports can leave out lapsed clients). */
+export function importable(preview) {
+  return preview.items.filter(function (it) { return it.ok && (!it.ended || preview.includeEnded !== false); });
+}
+
+/* ---------------------------------------------------------------
+   Sales-register exports from other gym software: one row per invoice
+   (Customer ID, Customer Name, Customer Phone No., Plan Name, Start Date,
+   End Date, Plan Status, Paid Amount, Payment Type, Invoice Date, …).
+   Grouped per customer:
+   - plan = the one running today, else the next one paid in advance,
+     else the most recent; with the file's own start/end dates
+   - earlier/later plans -> history; cancelled (CN) invoices ignored
+   - every paid invoice -> a payment on its invoice date
+   - an unpaid balance on the chosen plan -> noted on the client
+----------------------------------------------------------------*/
+function isRegister(rows) {
+  var r = rows[0];
+  return !!(cell(r, ["customername"]) !== "" && "End Date" in r || Object.keys(r).some(function (k) { return /customer\s*id/i.test(k); }) &&
+            Object.keys(r).some(function (k) { return /end\s*date/i.test(k); }));
+}
+function dateOnly(v) {
+  if (v instanceof Date && !isNaN(v)) return dayKey(v.getTime() + 12 * 3600000);
+  var s = String(v == null ? "" : v).trim(), m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (m) return m[1] + "-" + m[2] + "-" + m[3];
+  var k = toDateKey(s);
+  return k && k !== "bad" && validDate(k) ? k : "";
+}
+function payMode(s) {
+  s = String(s || "").trim().toLowerCase();
+  if (!s) return "Cash";
+  if (s === "upi" || /gpay|google|phonepe|paytm/.test(s)) return "UPI";
+  var m = PAY_MODES.filter(function (x) { return x.toLowerCase() === s; })[0];
+  return m || "Other";
+}
+function money2(n) { n = +n || 0; return Math.round(n * 100) / 100; }
+
+function parseRegister(rows) {
+  var t = today(), groups = {}, order = [];
+  rows.forEach(function (r, i) {
+    var name = String(cell(r, ["customername", "name", "clientname", "membername"]) || "").trim();
+    var phone = String(cell(r, ["customerphoneno", "customerphone", "phone", "mobile", "phoneno"]) || "").replace(/\.0$/, "").trim();
+    var key = String(cell(r, ["customerid", "memberid", "clientid"]) || "").trim() || (name.toLowerCase() + "|" + phone);
+    if (!groups[key]) { groups[key] = { key: key, rows: [] }; order.push(key); }
+    groups[key].rows.push({ row: i + 2, r: r, name: name, phone: phone });
+  });
+
+  var nameCount = {};
+  order.forEach(function (k) { var n = (groups[k].rows[0].name || "").toLowerCase(); if (n) nameCount[n] = (nameCount[n] || 0) + 1; });
+
+  var existing = {};
+  state.clients.forEach(function (c) {
+    if (c.active === false) return;
+    existing["n:" + c.name.toLowerCase()] = true;
+    var ph = ((state.clientPriv || {})[c.id] || {}).phone;
+    if (ph) existing["p:" + ph.replace(/\D/g, "").slice(-10)] = true;
+  });
+
+  return order.map(function (key) {
+    var g = groups[key], first = g.rows[0];
+    var it = { row: first.row, name: first.name || g.rows.map(function (x) { return x.name; }).filter(Boolean)[0] || "", invoices: g.rows.length };
+    try {
+      if (!it.name) throw new Error("No customer name");
+      var inv = g.rows.map(function (x) {
+        var r = x.r;
+        return {
+          plan: String(cell(r, ["planname", "plan", "membership"]) || "").trim() || "Membership",
+          start: dateOnly(cell(r, ["startdate", "start"])), end: dateOnly(cell(r, ["enddate", "end", "expirydate"])),
+          status: String(cell(r, ["planstatus", "status"]) || "").trim().toUpperCase(),
+          paid: money2(cell(r, ["paidamount", "amountpaid", "paid"])), total: money2(cell(r, ["totalsaleamount", "total", "netsaleamount", "amount"])),
+          mode: payMode(cell(r, ["paymenttype", "paymentmode", "mode", "paidby"])),
+          date: dateOnly(cell(r, ["invoicedate", "date", "billdate"])), invoice: String(cell(r, ["invoiceno", "invoice", "billno"]) || "").trim()
+        };
+      });
+      var valid = inv.filter(function (x) { return x.status !== "CN" && x.start && x.end && x.end >= x.start; });
+      if (!valid.length) throw new Error(inv.some(function (x) { return x.status === "CN"; }) ? "Only cancelled plans" : "No valid start/end dates");
+      valid.sort(function (a, b) { return a.start < b.start ? -1 : a.start > b.start ? 1 : 0; });
+      var running = valid.filter(function (x) { return x.start <= t && x.end >= t; });
+      var ahead = valid.filter(function (x) { return x.start > t; });
+      var cur = running.length ? running[running.length - 1] : ahead.length ? ahead[0] : valid.slice().sort(function (a, b) { return a.end < b.end ? 1 : -1; })[0];
+
+      var plan = toPlan(cur);
+      var phone = "";
+      try { phone = cleanPhone(first.phone || g.rows.map(function (x) { return x.phone; }).filter(Boolean)[0]); } catch (e) { it.warn = "phone not understood — left blank"; }
+      /* Same phone = same person (already a client). Same name but a different
+         phone = a different person: add the phone's last 4 digits to tell them apart. */
+      var last10 = phone ? phone.replace(/\D/g, "").slice(-10) : "";
+      if (last10 && existing["p:" + last10]) throw new Error("Duplicate — already a client (same phone)");
+      var nm = it.name.toLowerCase();
+      if (nameCount[nm] > 1 || existing["n:" + nm]) {
+        if (!last10) throw new Error("Duplicate — a client with this name exists and there's no phone to tell them apart");
+        it.name = it.name + " (·" + last10.slice(-4) + ")";
+        if (existing["n:" + it.name.toLowerCase()]) throw new Error("Duplicate — already a client");
+      }
+
+      var c = { id: uid(), name: it.name.slice(0, 80), active: true, joined: valid[0].start < t ? valid[0].start : t, plan: plan };
+      var notes = [];
+      var bal = money2(cur.total - cur.paid);
+      if (bal > 0) notes.push("Balance due on " + cur.plan + ": " + bal);
+      if (plan.type === "pack") notes.push("Sessions used before import unknown — set them by renewing if needed.");
+      it.client = c;
+      it.priv = { phone: phone, notes: notes.join(" · "), history: valid.filter(function (x) { return x !== cur; }).map(toPlan) };
+      it.pays = inv.filter(function (x) { return x.status !== "CN" && x.paid > 0; }).map(function (x) {
+        return { id: uid(), clientId: c.id, name: c.name, plan: x.plan, start: x.start || null, end: x.end || null, amount: x.paid,
+                 mode: x.mode, date: x.date || x.start || t, by: "Import" + (x.invoice ? " · " + x.invoice : ""), at: Date.now() };
+      });
+      it.ended = cur.end < t;
+      it.upcoming = cur.start > t;
+      it.summary = cur.plan + " · " + shortDate(cur.start) + " – " + shortDate(cur.end) + (cur.end.slice(0, 4) !== t.slice(0, 4) ? " " + cur.end.slice(0, 4) : "") +
+        " · " + it.invoices + " invoice" + (it.invoices === 1 ? "" : "s") +
+        (it.pays.length ? " · paid " + it.pays.reduce(function (s, p) { return s + p.amount; }, 0) : "") + (bal > 0 ? " · balance " + bal : "");
+      it.ok = true;
+      existing["n:" + it.name.toLowerCase()] = true;
+      if (last10) existing["p:" + last10] = true;
+    } catch (e) { it.ok = false; it.error = e.message; }
+    return it;
+  });
+}
+
+function toPlan(x) {
+  var m = /(\d+)\s*sessions?/i.exec(x.plan);
+  if (m) return { type: "pack", name: x.plan, start: x.start, end: x.end, sessions: Math.min(500, Math.max(1, +m[1])) };
+  return { type: "time", name: x.plan, start: x.start, end: x.end };
 }

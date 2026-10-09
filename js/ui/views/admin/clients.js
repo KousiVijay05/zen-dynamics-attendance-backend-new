@@ -3,7 +3,34 @@
 import { state } from "../../../core/store.js";
 import { esc, shortDate } from "../../../utils/format.js";
 import { money } from "../../../domain/payroll.js";
-import { clientStatus, clientPhone, usedSessions, suggestedStart, today, monthReport, PAY_MODES } from "../../../domain/clients.js";
+import { clientStatus, clientPhone, usedSessions, suggestedStart, today, monthReport, PAY_MODES, importable } from "../../../domain/clients.js";
+
+/* Preview for a sales-register export (one row per invoice, grouped per client). */
+function registerPreview(pv) {
+  var good = pv.items.filter(function (it) { return it.ok; }), bad = pv.items.filter(function (it) { return !it.ok; });
+  var ended = good.filter(function (it) { return it.ended; }), ahead = good.filter(function (it) { return it.upcoming; });
+  var take = importable(pv);
+  var pays = take.reduce(function (n, it) { return n + it.pays.length; }, 0);
+  var amt = take.reduce(function (n, it) { return n + it.pays.reduce(function (s, p) { return s + p.amount; }, 0); }, 0);
+  var invoices = pv.items.reduce(function (n, it) { return n + it.invoices; }, 0);
+  var list = good.filter(function (it) { return !it.ended || pv.includeEnded !== false; }).concat(bad);
+  return '<div class="import-sum"><b>' + esc(pv.fileName) + '</b><br>Sales register: ' + invoices + " invoices for " + pv.items.length + " clients<br>" +
+      '<span class="tag on">' + (good.length - ended.length - ahead.length) + " current</span>" +
+      (ahead.length ? '<span class="tag pending">' + ahead.length + " starting later</span>" : "") +
+      (ended.length ? '<span class="tag pending">' + ended.length + " plan ended</span>" : "") +
+      (bad.length ? '<span class="tag">' + bad.length + " with a problem</span>" : "") + "</div>" +
+    (ended.length ? '<label class="check" style="margin-top:6px"><input type="checkbox" id="cl_incl_ended"' + (pv.includeEnded !== false ? " checked" : "") + " />" +
+      "<div>Also import the " + ended.length + " clients whose plan has ended<span>Useful for win-back reminders. They appear as expired.</span></div></label>" : "") +
+    '<div class="rows import-rows" style="margin-top:10px">' + list.slice(0, 250).map(function (it) {
+      return '<div class="row"><span><span class="who">' + esc(it.name || "(no name)") + "</span>" +
+        (it.ok ? (it.ended ? '<span class="tag pending">ended</span>' : it.upcoming ? '<span class="tag pending">later</span>' : '<span class="tag on">current</span>') : '<span class="tag">Row ' + it.row + "</span>") +
+        '<br><span class="meta">' + esc(it.ok ? it.summary + (it.warn ? " · " + it.warn : "") : it.error) + "</span></span></div>";
+    }).join("") + (list.length > 250 ? '<div class="empty">…and ' + (list.length - 250) + " more</div>" : "") + "</div>" +
+    '<p class="note">Each client gets their current plan (or the next one if paid in advance, otherwise their last one) with the exact dates from the file; earlier plans are kept as history. ' +
+      pays + " payments (" + money(amt) + ") are recorded on their invoice dates, so past months' reports are right. Cancelled invoices are skipped.</p>" +
+    '<div class="btnrow"><button class="btn go" data-act="cl-import"' + (take.length ? "" : " disabled") + ">Import " + take.length + " client" + (take.length === 1 ? "" : "s") + "</button>" +
+    '<button class="btn quiet" data-act="cl-import-cancel">Cancel</button></div>';
+}
 
 function importCard() {
   var pv = state.clImport;
@@ -12,6 +39,7 @@ function importCard() {
     '<div class="btnrow"><button class="btn quiet" data-act="cl-template">' + icons.download + 'Template</button>' +
     '<label class="btn go file-btn">' + icons.login + 'Choose file<input id="cl_file" type="file" accept=".xlsx,.xls,.csv" /></label></div>';
   if (state.clImportBusy) html += '<div class="loading" style="margin-top:12px">Reading the file…</div>';
+  if (pv && pv.kind === "register") return html + registerPreview(pv) + "</div>";
   if (pv) {
     var ok = pv.items.filter(function (it) { return it.ok; }), bad = pv.items.filter(function (it) { return !it.ok; });
     html += '<div class="import-sum"><b>' + esc(pv.fileName) + '</b><br>' +
@@ -120,21 +148,25 @@ export function tabClients() {
   var on = all.filter(function (x) { return x.active !== false; });
 
   if (sub === "renew") {
-    var soon = [], expired = [], none = [];
+    var soon = [], expired = [], none = [], older = 0;
+    var recentCut = new Date(Date.now() - 60 * 864e5); recentCut = recentCut.getFullYear() + "-" + ("0" + (recentCut.getMonth() + 1)).slice(-2) + "-" + ("0" + recentCut.getDate()).slice(-2);
     on.forEach(function (x) {
       var st = clientStatus(x);
-      if (st.kind === "soon") soon.push(x); else if (st.kind === "expired") expired.push(x); else if (st.kind === "none") none.push(x);
+      if (st.kind === "soon") soon.push(x);
+      else if (st.kind === "expired") { if (!x.plan || !x.plan.end || x.plan.end >= recentCut) expired.push(x); else older++; }
+      else if (st.kind === "none") none.push(x);
     });
     soon.sort(function (a, b) { var s = clientStatus(a), t = clientStatus(b); return (s.daysLeft != null ? s.daysLeft : s.left) - (t.daysLeft != null ? t.daysLeft : t.left); });
     html += '<div class="tiles" style="margin-top:12px">' +
-      '<div class="tile"><span class="k">Active clients</span><span class="v">' + (on.length - expired.length - none.length) + "</span></div>" +
+      '<div class="tile"><span class="k">Active clients</span><span class="v">' + (on.length - expired.length - older - none.length) + "</span></div>" +
       '<div class="tile"><span class="k">Ending soon</span><span class="v" style="color:var(--gold-strong)">' + soon.length + "</span></div>" +
       '<div class="tile"><span class="k">Expired</span><span class="v" style="color:var(--status-bad)">' + expired.length + "</span></div>" +
       '<div class="tile gold"><span class="k">Collected ' + esc(new Date().toLocaleDateString([], { month: "short" })) + '</span><span class="v">' +
         money(monthReport(today().slice(0, 7)).revenue) + "</span></div></div>";
     var act = function (x) { return waBtn(x) + '<button class="btn go small" data-act="cl-edit" data-id="' + esc(x.id) + '">Renew</button>'; };
     html += "<h2>Ending soon (" + soon.length + ")</h2>" + '<div class="rows">' + (soon.length ? soon.map(function (x) { return clientRow(x, act(x)); }).join("") : '<div class="empty">Nobody ends in the next 7 days.</div>') + "</div>";
-    html += "<h2>Expired (" + expired.length + ")</h2>" + '<div class="rows">' + (expired.length ? expired.map(function (x) { return clientRow(x, act(x)); }).join("") : '<div class="empty">No expired clients.</div>') + "</div>";
+    html += "<h2>Expired in the last 60 days (" + expired.length + ")</h2>" + '<div class="rows">' + (expired.length ? expired.map(function (x) { return clientRow(x, act(x)); }).join("") : '<div class="empty">Nobody expired recently.</div>') + "</div>";
+    if (older) html += '<p class="note">' + older + " more expired earlier than that — find them in Clients.</p>";
     if (none.length) html += "<h2>No plan yet (" + none.length + ")</h2>" + '<div class="rows">' + none.map(function (x) { return clientRow(x, act(x)); }).join("") + "</div>";
     html += '<p class="note">"Ending soon" = within 7 days, or 2 or fewer sessions left. The WhatsApp button opens a reminder to that client — you press send.</p>';
     return html + msg();

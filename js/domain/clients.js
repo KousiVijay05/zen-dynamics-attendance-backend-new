@@ -27,13 +27,49 @@
 ----------------------------------------------------------------*/
 
 import { state, emitChange } from "../core/store.js";
-import { sget } from "../storage/storage-api.js";
+import { sget, sset } from "../storage/storage-api.js";
 import { uid, dayKey, shortDate, num, ymKey } from "../utils/format.js";
 
 function A() { return window.storageAuth; }
 var DAY = 864e5;
 
 export var PAY_MODES = ["Cash", "UPI", "Card", "Bank transfer", "Other"];
+
+/* Zen & Dynamics' timetable and price list — the starting setup. Once an
+   admin adds or removes a batch/package, the edited list is saved in
+   org:config and used instead. */
+export var DEFAULT_BATCHES = [
+  { id: "b0600", name: "6–7 AM", start: "06:00", end: "07:00" },
+  { id: "b0800", name: "8–9 AM", start: "08:00", end: "09:00" },
+  { id: "b0930", name: "9:30–10:30 AM", start: "09:30", end: "10:30" },
+  { id: "b1700", name: "5–6 PM", start: "17:00", end: "18:00" },
+  { id: "b1900", name: "7–8 PM", start: "19:00", end: "20:00" }
+];
+export var DEFAULT_PACKAGES = [
+  { id: "m6-1", group: "6 days/week", name: "1M · 6 days/week", type: "time", months: 1, fee: 4000 },
+  { id: "m6-3", group: "6 days/week", name: "3M · 6 days/week", type: "time", months: 3, fee: 10500 },
+  { id: "m6-6", group: "6 days/week", name: "6M · 6 days/week", type: "time", months: 7, fee: 16500, note: "valid 7 months incl. 1-month pause" },
+  { id: "m6-12", group: "6 days/week", name: "12M · 6 days/week", type: "time", months: 13, fee: 22200, note: "valid 13 months incl. 1-month pause" },
+  { id: "m3-1", group: "3 days/week", name: "1M · 3 days/week", type: "time", months: 1, fee: 3000 },
+  { id: "m3-3", group: "3 days/week", name: "3M · 3 days/week", type: "time", months: 3, fee: 7900 },
+  { id: "m3-6", group: "3 days/week", name: "6M · 3 days/week", type: "time", months: 7, fee: 12400, note: "valid 7 months incl. 1-month pause" },
+  { id: "m3-12", group: "3 days/week", name: "12M · 3 days/week", type: "time", months: 13, fee: 16500, note: "valid 13 months incl. 1-month pause" },
+  { id: "s1", group: "Sessions", name: "1 session", type: "pack", sessions: 1, fee: 400 },
+  { id: "s3", group: "Sessions", name: "3 sessions", type: "pack", sessions: 3, days: 7, fee: 999 },
+  { id: "s6", group: "Sessions", name: "6 sessions", type: "pack", sessions: 6, days: 7, fee: 1499 },
+  { id: "s8", group: "Sessions", name: "8 sessions", type: "pack", sessions: 8, days: 45, fee: 2500 },
+  { id: "s10", group: "Sessions", name: "10 sessions", type: "pack", sessions: 10, days: 45, fee: 3000 },
+  { id: "s12", group: "Sessions", name: "12 sessions", type: "pack", sessions: 12, days: 45, fee: 3500 }
+];
+export function packages() { return (state.cfg && Array.isArray(state.cfg.packages)) ? state.cfg.packages : DEFAULT_PACKAGES; }
+export function packageById(id) { return packages().filter(function (x) { return x.id === id; })[0] || null; }
+/** "valid 45 days" / "valid 3 months" / "no expiry" */
+export function packageValidity(k) {
+  if (k.note) return k.note;
+  if (k.days) return "valid " + (k.days % 7 === 0 && k.days < 28 ? (k.days / 7) + " week" + (k.days === 7 ? "" : "s") : k.days + " days");
+  if (k.months) return "valid " + k.months + " month" + (k.months === 1 ? "" : "s");
+  return "no expiry date";
+}
 
 export function today() { return dayKey(Date.now()); }
 function k8(d) { return d.replace(/-/g, ""); }                 // "2026-10-09" -> "20261009"
@@ -43,8 +79,22 @@ function k8(d) { return d.replace(/-/g, ""); }                 // "2026-10-09" -
 var unwatch = null, watchFrom = null;
 
 /** Load the client list (and, for admins, phones/notes), then watch ticks live. */
+/* Names of staff (for "Coach" when taking a session). Coaches can't read the
+   staff list itself, so admins keep this small names-only copy up to date. */
+export function coachList() {
+  var list = state.staffNames && state.staffNames.length ? state.staffNames
+    : state.roster.map(function (p) { return { id: p.id, name: p.name, active: p.active !== false }; });
+  return list.filter(function (x) { return x.active !== false; });
+}
+function syncStaffNames() {
+  if (!state.me || !state.me.admin || !state.roster.length) return;
+  var want = state.roster.map(function (p) { return { id: p.id, name: p.name, active: p.active !== false }; });
+  if (JSON.stringify(want) !== JSON.stringify(state.staffNames || [])) { state.staffNames = want; sset("org:staffnames", want, true); }
+}
+
 export function loadClients() {
-  var jobs = [sget("cl:roster", true).then(function (r) { state.clients = Array.isArray(r) ? r : []; })];
+  var jobs = [sget("cl:roster", true).then(function (r) { state.clients = Array.isArray(r) ? r : []; }),
+              sget("org:staffnames", true).then(function (n) { state.staffNames = Array.isArray(n) ? n : []; syncStaffNames(); })];
   if (state.me && state.me.admin) jobs.push(sget("cl:private", true).then(function (p) { state.clientPriv = p || {}; }));
   return Promise.all(jobs).then(function () { watchTicks(); state.clLoaded = true; emitChange(); });
 }
@@ -71,7 +121,7 @@ export function stopClients() {
   if (unwatch) unwatch();
   unwatch = null; watchFrom = null;
   state.clients = []; state.clientPriv = {}; state.clAtt = {}; state.clSess = {}; state.clPays = {}; state.clOld = {}; state.clLoaded = false; state.clPaysAll = false;
-  state.session = null;
+  state.session = null; state.staffNames = [];
 }
 
 /* ---------- plans + status ---------- */
@@ -87,9 +137,26 @@ export function planEnd(start, months) {
 }
 
 /** Build a plan from form fields. Throws with a readable message on bad input. */
+function addDays(k, n) { return dayKey(new Date(k + "T12:00:00").getTime() + n * DAY); }
+
 export function makePlan(f) {
   var start = (f.start || "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) throw new Error("Pick the plan's start date.");
+  if (f.pkg && f.pkg !== "custom") {
+    var k = packageById(f.pkg);
+    if (!k) throw new Error("That package no longer exists — pick another.");
+    var pl = { type: k.type, name: k.name, start: start, pkg: k.id };
+    if (k.type === "pack") {
+      pl.sessions = k.sessions;
+      var u = Math.round(num(f.usedBefore, 0));
+      if (u < 0 || u >= k.sessions) throw new Error("Sessions already used must be less than " + k.sessions + ".");
+      if (u) pl.usedBefore = u;
+    }
+    if (k.days) pl.end = addDays(start, k.days - 1);
+    else if (k.months) pl.end = planEnd(start, k.months);
+    if (k.type === "time" && !pl.end) throw new Error("This package has no validity — fix it in Admin → Shifts → Packages.");
+    return pl;
+  }
   if (f.type === "pack") {
     var n = Math.round(num(f.sessions, 0));
     if (n < 1 || n > 500) throw new Error("Sessions must be between 1 and 500.");
@@ -167,7 +234,7 @@ export function lastVisits() {
 }
 
 /* Batches are admin-defined time slots (Admin → Shifts), kept in org:config. */
-export function batches() { return (state.cfg && Array.isArray(state.cfg.batches)) ? state.cfg.batches : []; }
+export function batches() { return (state.cfg && Array.isArray(state.cfg.batches)) ? state.cfg.batches : DEFAULT_BATCHES; }
 function batchById(id) { return batches().filter(function (b) { return b.id === id; })[0] || null; }
 /** The batch running now, or the next one today, or the last one. */
 export function suggestedBatch() {
@@ -191,10 +258,11 @@ function restoreSession() {
   } catch (e) {}
 }
 
-export function startSession(batchId) {
+export function startSession(batchId, coachId) {
   var b = batchById(batchId);
+  var co = coachList().filter(function (x) { return x.id === coachId; })[0] || { id: state.me.id, name: state.me.name };
   state.session = { sid: uid(), day: today(), batch: b ? b.id : "general", batchName: b ? b.name : "General session",
-                    start: Date.now(), picked: {} };
+                    coach: co.id, coachName: co.name, start: Date.now(), picked: {} };
   persist(); emitChange();
 }
 export function discardSession() { state.session = null; persist(); emitChange(); }
@@ -219,12 +287,14 @@ export function submitSession() {
   var day = k8(s.day), at = { ".sv": "timestamp" }, paths = {}, clients = {};
   ids.forEach(function (id) {
     var old = markToday(id);
-    var mark = { by: state.me.id, byName: state.me.name, at: at, sid: s.sid, batch: s.batch, batchName: s.batchName };
+    var mark = { by: state.me.id, byName: state.me.name, at: at, sid: s.sid, batch: s.batch, batchName: s.batchName,
+                 coach: s.coach || state.me.id, coachName: s.coachName || state.me.name };
     if (old && old.void) mark.prev = old;            // re-marking a voided mark keeps the old one inside
     paths["clatt/" + day + "/" + id] = mark;
     clients[id] = true;
   });
   paths["clsess/" + day + "/" + s.sid] = { batch: s.batch, batchName: s.batchName, by: state.me.id, byName: state.me.name,
+                                          coach: s.coach || state.me.id, coachName: s.coachName || state.me.name,
                                           start: s.start, at: at, clients: clients };
   return A().update(paths).then(function () {
     state.session = null; persist(); emitChange();
@@ -462,7 +532,7 @@ export function monthReport(ym) {
       var mk = src[d][cid];
       if (mk.void) { voided++; return; }
       visits[cid] = (visits[cid] || 0) + 1; n++; total++;
-      byCoach[mk.byName || mk.by] = (byCoach[mk.byName || mk.by] || 0) + 1;
+      var cn = mk.coachName || mk.byName || mk.by; byCoach[cn] = (byCoach[cn] || 0) + 1;
       var bn = mk.batchName || "Before batches"; byBatch[bn] = (byBatch[bn] || 0) + 1;
     });
     if (n) days++;
@@ -473,7 +543,7 @@ export function monthReport(ym) {
   var sessions = 0, sessByCoach = {};
   Object.keys(state.clSess || {}).forEach(function (d) {
     if (d < from || d > to) return;
-    Object.keys(state.clSess[d]).forEach(function (sid) { var x = state.clSess[d][sid]; sessions++; sessByCoach[x.byName || x.by] = (sessByCoach[x.byName || x.by] || 0) + 1; });
+    Object.keys(state.clSess[d]).forEach(function (sid) { var x = state.clSess[d][sid], cn = x.coachName || x.byName || x.by; sessions++; sessByCoach[cn] = (sessByCoach[cn] || 0) + 1; });
   });
   return { visits: visits, totalVisits: total, daysWithVisits: days, byCoach: byCoach, byBatch: byBatch, voided: voided,
            sessions: sessions, sessByCoach: sessByCoach, payments: pays, revenue: revenue, byMode: byMode };
@@ -491,13 +561,13 @@ export function exportClientsExcel(ym) {
     clients.push([c.name, clientPhone(c.id), p.name || "", p.type === "pack" ? "Session pack" : p.type ? "Time" : "",
       p.start || "", p.end || "", p.sessions || "", p.type === "pack" ? usedSessions(c) : "", st.label, r.visits[c.id] || 0]);
   });
-  var visits = [["Date", "Client", "Batch", "Marked by", "Time", "Voided", "Void reason"]];
+  var visits = [["Date", "Client", "Batch", "Coach", "Submitted by", "Time", "Voided", "Void reason"]];
   var src = (watchFrom && (ym.replace("-", "") + "01") >= watchFrom) ? state.clAtt : (state.clOld[ym] || {});
   Object.keys(src).sort().forEach(function (d) {
     if (d.slice(0, 6) !== ym.replace("-", "")) return;
     Object.keys(src[d]).forEach(function (cid) {
       var t = src[d][cid];
-      visits.push([d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6), name(cid), t.batchName || "", t.byName || coach(t.by),
+      visits.push([d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6), name(cid), t.batchName || "", t.coachName || t.byName || coach(t.by), t.byName || coach(t.by),
         new Date(t.at).toLocaleTimeString(), t.void ? "Voided by " + (t.void.byName || "") : "", t.void ? t.void.reason : ""]);
     });
   });

@@ -6,7 +6,7 @@
    payments here — coaches can't read those at all. */
 import { state } from "../../core/store.js";
 import { esc, tClock, hm12 } from "../../utils/format.js";
-import { clientStatus, tickedToday, markToday, batches, suggestedBatch, sessionsOn, canVoid, undoMinutesLeft, today } from "../../domain/clients.js";
+import { clientStatus, tickedToday, markToday, batches, suggestedBatch, sessionsOn, canVoid, undoMinutesLeft, today, coachList } from "../../domain/clients.js";
 import { brandMark } from "../components/brand.js";
 import { icons, avatar } from "../components/icons.js";
 import { distanceNow } from "../../domain/geofence.js";
@@ -33,7 +33,7 @@ function taking() {
   var shown = q ? list.filter(function (c) { return c.name.toLowerCase().indexOf(q) >= 0; }) : list;
   var picked = Object.keys(s.picked).filter(function (id) { return !tickedToday(id); }).length;
 
-  var html = '<div class="hero-stat"><span class="k">' + esc(s.batchName) + " · started " + tClock(s.start) + '</span>' +
+  var html = '<div class="hero-stat"><span class="k">' + esc(s.batchName) + " · " + esc(s.coachName || "") + " · started " + tClock(s.start) + '</span>' +
       '<span class="v">' + picked + "<small> ticked</small></span>" +
       '<div class="meter"><i style="width:' + (list.length ? Math.round(picked / list.length * 100) : 0) + '%"></i></div></div>' +
     '<div class="field"><input id="cl_search" type="search" autocomplete="off" placeholder="Search clients…" value="' + esc(state.clSearch || "") + '" /></div>';
@@ -65,6 +65,9 @@ function overview() {
     '<div class="field"><label for="cl_batch">Batch</label><select id="cl_batch">' +
       bs.map(function (b) { return '<option value="' + esc(b.id) + '"' + (sug && sug.id === b.id ? " selected" : "") + ">" + esc(b.name) + " · " + esc(hm12(b.start)) + (b.end ? "–" + esc(hm12(b.end)) : "") + "</option>"; }).join("") +
       '<option value="general"' + (bs.length ? "" : " selected") + ">General session (no batch)</option></select></div>" +
+    '<div class="field"><label for="cl_coach">Coach</label><select id="cl_coach">' +
+      coachList().map(function (x) { return '<option value="' + esc(x.id) + '"' + (state.me && x.id === state.me.id ? " selected" : "") + ">" + esc(x.name) + (state.me && x.id === state.me.id ? " (me)" : "") + "</option>"; }).join("") +
+      "</select></div>" +
     (bs.length ? "" : '<p class="note">No batches yet — an admin can add them in Admin → Shifts.</p>') +
     '<div class="btnrow"><button class="btn go wide" data-act="cl-start">' + icons.login + "Start session</button></div></div>";
 
@@ -90,7 +93,7 @@ function overview() {
         (act ? "<span>" + act + "</span>" : "") + "</div>";
     }).join("");
     return '<details class="sess"' + (x.by === (state.me && state.me.id) ? " open" : "") + '><summary><span><span class="who">' + esc(x.batchName || "Session") + "</span>" +
-      '<br><span class="meta">' + esc(who(x.by, x.byName)) + " · " + tClock(x.at) + "</span></span>" +
+      '<br><span class="meta">' + esc(x.coachName && x.coach !== x.by ? x.coachName + " (submitted by " + who(x.by, x.byName) + ")" : who(x.coach || x.by, x.coachName || x.byName)) + " · " + tClock(x.at) + "</span></span>" +
       '<span class="dur">' + ids.length + "</span></summary>" + '<div class="rows">' + rows + "</div></details>";
   }).join("");
   return html + msg();

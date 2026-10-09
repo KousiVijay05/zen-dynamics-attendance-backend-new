@@ -189,6 +189,7 @@ function enqueue(key, value) {
 /* who = { uid, staffId, admin, mustChange } — staffId null means "signed in
    but not an active member". Cached per account so the app opens offline. */
 var who = null;
+var pendingSignOut = null;
 var resolveAuthReady;
 var authReady = new Promise(function (r) { resolveAuthReady = r; });
 
@@ -288,7 +289,11 @@ window.storageAuth = {
   current: function () { return uid && who && who.uid === uid ? Object.assign({}, who) : null; },
 
   signIn: function (username, password) {
-    return readNode("logins/" + loginKey(username)).catch(function () { return null; }).then(function (email) {
+    /* A sign-out still finishing (it waits for unsent punches) must not land
+       after — and undo — this new sign-in on the same phone. */
+    return (pendingSignOut || Promise.resolve()).then(function () {
+      return readNode("logins/" + loginKey(username)).catch(function () { return null; });
+    }).then(function (email) {
       return signInWithEmailAndPassword(auth, typeof email === "string" ? email : defaultEmail(username), password);
     }).then(function (cred) {
       switchUser(cred.user.uid);
@@ -310,17 +315,19 @@ window.storageAuth = {
        site) up to 5 s to reach the server first. If offline it stays queued
        for this person and is sent the next time they sign in. */
     var t0 = Date.now();
+    if (pendingSignOut) return pendingSignOut;
     var settle = new Promise(function (res) {
       (function wait() {
         if (!myQueue().length || !online || Date.now() - t0 > 5000) return res();
         setTimeout(wait, 150);
       })();
     });
-    return settle.then(function () {
+    pendingSignOut = settle.then(function () {
       lsDel(snapKey());   // shared phone: don't leave this person's records behind
       if (uid) lsDel(whoKey(uid));
       return fbSignOut(auth);
-    }).then(function () { switchUser(null); });
+    }).then(function () { switchUser(null); }).then(function () { pendingSignOut = null; }, function (e) { pendingSignOut = null; throw e; });
+    return pendingSignOut;
   },
 
   /** Admin: create someone else's sign-in account. -> { uid, email, isDefault } */

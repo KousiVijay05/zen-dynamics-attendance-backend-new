@@ -26,7 +26,7 @@ import {
 import { clockIn, clockOut, loadAdminData, openEntryFor } from "../domain/attendance.js";
 import { addStaff, updateStaff, toggleActive, startEdit, cancelEdit } from "../domain/roster.js";
 import {
-  toggleWeeklyOff, savePayRules, saveSiteSettings, addBatch, deleteBatch,
+  toggleWeeklyOff, savePayRules, saveSiteSettings, addBatch, deleteBatch, addPackage, deletePackage,
   addShift, updateShift, deleteShift, startEditShift, cancelEditShift
 } from "../domain/org.js";
 import { exportExcel } from "../domain/excel.js";
@@ -69,6 +69,8 @@ export function initEvents() {
   root.addEventListener("change", function (ev) {
     if (ev.target.id === "cl_month") { state.clMonth = ev.target.value; emitChange(); loadMonth(state.clMonth); }
     if (ev.target.id === "ca_type") { state.clAddType = ev.target.value; emitChange(); }
+    if (ev.target.id === "ca_pkg") { state.clAddPkg = ev.target.value; emitChange(); }
+    if (ev.target.id === "cr_pkg") { state.clRenewPkg = ev.target.value; emitChange(); }
     var fm = /^clf_(status|window|seen|plan|balance|sort)$/.exec(ev.target.id);
     if (fm) { state.clFilter = Object.assign({}, state.clFilter); state.clFilter[fm[1]] = ev.target.value; emitChange(); }
     if (ev.target.id === "cl_incl_ended" && state.clImport) { state.clImport.includeEnded = ev.target.checked; emitChange(); }
@@ -352,7 +354,7 @@ tasks: selectedTasks
     /* ---------- clients ---------- */
     if (act === "cl-open") { state.clBack = state.view; state.view = "clients"; state.msg = ""; emitChange(); return; }
     if (act === "cl-back") { state.view = state.clBack === "admin" ? "admin" : "staff"; state.msg = ""; state.clSearch = ""; emitChange(); return; }
-    if (act === "cl-start") { state.msg = ""; state.clSearch = ""; startSession($("cl_batch") ? $("cl_batch").value : "general"); window.scrollTo(0, 0); return; }
+    if (act === "cl-start") { state.msg = ""; state.clSearch = ""; startSession($("cl_batch") ? $("cl_batch").value : "general", $("cl_coach") ? $("cl_coach").value : null); window.scrollTo(0, 0); return; }
     if (act === "cl-pick") { try { togglePick(id); } catch (err) { say(err.message); } return; }
     if (act === "cl-discard") {
       var np = state.session ? Object.keys(state.session.picked).length : 0;
@@ -376,6 +378,20 @@ tasks: selectedTasks
     }
     if (act === "clf-clear") { state.clFilter = Object.assign({}, DEFAULT_FILTER); state.clSearch = ""; emitChange(); return; }
     if (act === "clf-export") { try { say(exportFiltered(filterClients(state.clFilter, state.clSearch)), true); } catch (err) { say(err.message); } return; }
+    if (act === "addpkg") {
+      try {
+        addPackage({ name: $("k_name").value, type: $("k_type").value, group: $("k_group").value, months: $("k_months").value,
+                     days: $("k_days").value, sessions: $("k_sessions").value, fee: $("k_fee").value })
+          .then(function (msg) { clearFields(["k_name", "k_group", "k_months", "k_days", "k_sessions", "k_fee"]); sayAndPaint(msg, true); })
+          .catch(function (err) { say(err.message); });
+      } catch (err) { say(err.message); }
+      return;
+    }
+    if (act === "delpkg") {
+      if (!wConfirm("Remove this package? Clients already on it keep their plan.")) return;
+      deletePackage(id).then(function (msg) { sayAndPaint(msg, true); }).catch(function (err) { say(err.message); });
+      return;
+    }
     if (act === "addbatch") {
       try {
         addBatch({ name: $("b_name").value, start: $("b_start").value, end: $("b_end").value })
@@ -395,14 +411,14 @@ tasks: selectedTasks
       return;
     }
     if (act === "cl-edit") {
-      state.clEdit = id; state.clRenewType = null; state.msg = ""; emitChange(); window.scrollTo(0, 0);
+      state.clEdit = id; state.clRenewType = null; state.clRenewPkg = null; state.msg = ""; emitChange(); window.scrollTo(0, 0);
       if (!state.clPaysAll) loadAllPayments();
       return;
     }
     if (act === "cl-closeedit") { state.clEdit = null; state.clSub = "all"; state.msg = ""; emitChange(); return; }
     if (act === "cl-add") {
       try {
-        var nf = Object.assign({ type: $("ca_type").value, months: ($("ca_months") || {}).value, sessions: ($("ca_sessions") || {}).value, usedBefore: ($("ca_used") || {}).value, start: $("ca_start").value, amount: $("ca_amount").value, mode: $("ca_mode").value }, { name: $("ca_name").value, phone: $("ca_phone").value, notes: $("ca_notes").value });
+        var nf = Object.assign({ pkg: $("ca_pkg") ? $("ca_pkg").value : "custom", type: ($("ca_type") || {}).value, months: ($("ca_months") || {}).value, sessions: ($("ca_sessions") || {}).value, usedBefore: ($("ca_used") || {}).value, start: $("ca_start").value, amount: $("ca_amount").value, mode: $("ca_mode").value }, { name: $("ca_name").value, phone: $("ca_phone").value, notes: $("ca_notes").value });
         addClient(nf).then(function (msg) {
           clearFields(["ca_name", "ca_phone", "ca_notes", "ca_months", "ca_sessions", "ca_used", "ca_amount"]);
           sayAndPaint(msg, true);
@@ -412,9 +428,9 @@ tasks: selectedTasks
     }
     if (act === "cl-renew") {
       try {
-        renewClient(id, { type: $("cr_type").value, months: ($("cr_months") || {}).value, sessions: ($("cr_sessions") || {}).value, usedBefore: ($("cr_used") || {}).value, start: $("cr_start").value, amount: $("cr_amount").value, mode: $("cr_mode").value }).then(function (msg) {
+        renewClient(id, { pkg: $("cr_pkg") ? $("cr_pkg").value : "custom", type: ($("cr_type") || {}).value, months: ($("cr_months") || {}).value, sessions: ($("cr_sessions") || {}).value, usedBefore: ($("cr_used") || {}).value, start: $("cr_start").value, amount: $("cr_amount").value, mode: $("cr_mode").value }).then(function (msg) {
           clearFields(["cr_months", "cr_sessions", "cr_amount"]);
-          state.clRenewType = null; sayAndPaint(msg, true);
+          state.clRenewType = null; state.clRenewPkg = null; sayAndPaint(msg, true);
         }).catch(function (err) { say(err.message); });
       } catch (err) { say(err.message); }
       return;

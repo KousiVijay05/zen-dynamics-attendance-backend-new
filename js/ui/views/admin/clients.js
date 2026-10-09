@@ -4,7 +4,7 @@ import { state } from "../../../core/store.js";
 import { esc, shortDate } from "../../../utils/format.js";
 import { money } from "../../../domain/payroll.js";
 import { clientStatus, clientPhone, usedSessions, suggestedStart, today, monthReport, PAY_MODES, importable, clientLedger,
-         filterClients, planNames, lastVisits, DEFAULT_FILTER } from "../../../domain/clients.js";
+         filterClients, planNames, lastVisits, DEFAULT_FILTER, packages, packageById, packageValidity } from "../../../domain/clients.js";
 
 function opt(v, label, cur) { return '<option value="' + esc(v) + '"' + (v === cur ? " selected" : "") + ">" + esc(label) + "</option>"; }
 
@@ -136,8 +136,35 @@ function waBtn(c) {
     : "";
 }
 
-/* Plan fields shared by "Add client" and "Renew". `p` = id prefix. */
-function planFields(p, type, start) {
+/* Package picker + plan fields, shared by "Add client" and "Renew". `p` = id prefix. */
+function packageSelect(p, cur) {
+  var groups = {}, order = [];
+  packages().forEach(function (k) { var g = k.group || "Packages"; if (!groups[g]) { groups[g] = []; order.push(g); } groups[g].push(k); });
+  return '<div class="field"><label for="' + p + '_pkg">Package</label><select id="' + p + '_pkg">' +
+    order.map(function (g) {
+      return '<optgroup label="' + esc(g) + '">' + groups[g].map(function (k) {
+        return '<option value="' + esc(k.id) + '"' + (k.id === cur ? " selected" : "") + ">" + esc(k.name) + " · " + money(k.fee) + "</option>";
+      }).join("") + "</optgroup>";
+    }).join("") + '<option value="custom"' + (cur === "custom" ? " selected" : "") + ">Custom plan…</option></select></div>";
+}
+
+function planFields(p, type, start, pkgId) {
+  var k = pkgId && pkgId !== "custom" ? packageById(pkgId) : null;
+  if (k) {
+    return packageSelect(p, k.id) +
+      '<p class="pkg-info">' + esc(k.type === "pack" ? k.sessions + " session" + (k.sessions === 1 ? "" : "s") + " · " : "") + esc(packageValidity(k)) + " · fee " + money(k.fee) + "</p>" +
+      (k.type === "pack" ? '<div class="field"><label for="' + p + '_used">Sessions already used</label><input id="' + p + '_used" class="num" type="number" min="0" max="499" placeholder="0 for a new pack" /></div>' : "") +
+      '<div class="field"><label for="' + p + '_start">Starts on</label><input id="' + p + '_start" type="date" value="' + esc(start) + '" /></div>' +
+      '<div class="field pair">' +
+        '<div><label for="' + p + '_amount">Amount paid</label><input id="' + p + '_amount" class="num" type="number" min="0" step="0.01" value="' + k.fee + '" /></div>' +
+        '<div><label for="' + p + '_mode">Paid by</label><select id="' + p + '_mode">' +
+          PAY_MODES.map(function (m) { return "<option>" + esc(m) + "</option>"; }).join("") + "</select></div>" +
+      "</div>" + '<p class="note" style="margin-top:6px">Change the amount for a discount, or 0 if not paid yet.</p>';
+  }
+  return packageSelect(p, "custom") + planFieldsCustom(p, type, start);
+}
+
+function planFieldsCustom(p, type, start) {
   return '<div class="field"><label for="' + p + '_type">Plan type</label><select id="' + p + '_type" data-act="cl-ptype">' +
       '<option value="time"' + (type === "time" ? " selected" : "") + ">Months (ends on a date)</option>" +
       '<option value="pack"' + (type === "pack" ? " selected" : "") + ">Session pack (number of visits)</option></select></div>" +
@@ -169,7 +196,8 @@ function detail(c) {
       (priv.notes ? '<p class="note" style="margin-top:10px">' + esc(priv.notes) + "</p>" : "") +
     "</div>" + ledger(c);
 
-  html += "<h2>Renew / new plan</h2>" + '<div class="card">' + planFields("cr", type, suggestedStart(c)) +
+  var curPkg = state.clRenewPkg || (c.plan && c.plan.pkg && packageById(c.plan.pkg) ? c.plan.pkg : (packages()[0] || {}).id || "custom");
+  html += "<h2>Renew / new plan</h2>" + '<div class="card">' + planFields("cr", type, suggestedStart(c), curPkg) +
     '<div class="btnrow"><button class="btn go wide" data-act="cl-renew" data-id="' + esc(c.id) + '">Save renewal</button></div></div>';
 
   html += "<h2>Details</h2>" + '<div class="card">' +
@@ -241,7 +269,7 @@ export function tabClients() {
     html += '<div class="card"><h3>New client</h3>' +
       '<div class="field"><label for="ca_name">Name</label><input id="ca_name" type="text" placeholder="Full name" /></div>' +
       '<div class="field"><label for="ca_phone">Phone (WhatsApp)</label><input id="ca_phone" type="tel" inputmode="tel" placeholder="10-digit mobile" /></div>' +
-      planFields("ca", type, today()) +
+      planFields("ca", type, today(), state.clAddPkg || (packages()[0] || {}).id || "custom") +
       '<div class="field"><label for="ca_notes">Notes (optional)</label><textarea id="ca_notes" rows="2" placeholder="Goals, injuries, preferred batch…"></textarea></div>' +
       '<div class="btnrow"><button class="btn go wide" data-act="cl-add">Add client</button></div></div>';
     html += importCard();

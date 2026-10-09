@@ -58,6 +58,11 @@
         ".read": "(auth != null && root.child('uidmap/' + auth.uid).isString())",
         ".write": "(auth != null && root.child('uidmap/' + auth.uid).isString() && root.child('admins/' + root.child('uidmap/' + auth.uid).val()).val() === true)",
         ".validate": "newData.isString() && newData.val().length <= 500000"
+      },
+      "org:staffnames": {
+        ".read": "(auth != null && root.child('uidmap/' + auth.uid).isString())",
+        ".write": "(auth != null && root.child('uidmap/' + auth.uid).isString() && root.child('admins/' + root.child('uidmap/' + auth.uid).val()).val() === true)",
+        ".validate": "newData.isString() && newData.val().length <= 50000"
       }
     },
     "clatt": {
@@ -108,6 +113,12 @@
           },
           "$other": {
             ".validate": false
+          },
+          "coach": {
+            ".validate": "newData.isString() && newData.val().length <= 100"
+          },
+          "coachName": {
+            ".validate": "newData.isString() && newData.val().length <= 100"
           }
         }
       }
@@ -144,6 +155,12 @@
           },
           "$other": {
             ".validate": false
+          },
+          "coach": {
+            ".validate": "newData.isString() && newData.val().length <= 100"
+          },
+          "coachName": {
+            ".validate": "newData.isString() && newData.val().length <= 100"
           }
         }
       }

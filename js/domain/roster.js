@@ -58,6 +58,8 @@ function rosterPaths(entry) {
   var paths = {};
   paths["kv/org:roster"] = JSON.stringify(list);
   paths["kv/profile:" + entry.id] = JSON.stringify(clean(entry));
+  /* names-only copy coaches can read (for "Coach" when taking a session) */
+  paths["kv/org:staffnames"] = JSON.stringify(list.map(function (p) { return { id: p.id, name: p.name, active: p.active !== false }; }));
   return paths;
 }
 

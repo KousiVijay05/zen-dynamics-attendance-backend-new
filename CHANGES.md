@@ -893,3 +893,28 @@ search by name or phone; live "X of Y" count; Excel of the filtered list.
 Tests: sessions.test.js (30), clients.test.js now 61 (incl. delete / late
 void / backdate / session rewrite attempts against the rules); all suites
 re-run: 326 checks.
+
+## 2026-10-10 — Membership packages, batch timetable, coach on sessions (v31)
+
+- **Packages**: Zen & Dynamics' price list is built in — 6 days/week 1M/3M/6M/12M
+  (₹4,000 / 10,500 / 16,500 / 22,200; 6M valid 7 months and 12M valid 13
+  months, incl. a 1-month pause), 3 days/week 1M/3M/6M/12M (₹3,000 / 7,900 /
+  12,400 / 16,500), session packs 1 / 3 / 6 / 8 / 10 / 12 (₹400 / 999 / 1,499
+  / 2,500 / 3,000 / 3,500; 1 week or 45 days validity). Add and Renew open
+  with a package picked: validity and fee fill in (amount editable for
+  discounts); "Custom plan…" keeps the old fields. Plans remember their
+  package so renewals offer the same one. Manage in Admin → Shifts →
+  Membership packages (validity in months or days).
+- **Batches**: 6–7 AM, 8–9 AM, 9:30–10:30 AM, 5–6 PM, 7–8 PM built in;
+  editable in Admin → Shifts.
+- **Coach** dropdown when starting a session (defaults to me). Marks and
+  sessions record `coach` (who took it) and `by` (who submitted); reports
+  count sessions per coach. Coaches can read a names-only staff list
+  (`kv/org:staffnames`: id, name, active — admins write it on every roster
+  change); they still can't read the roster, phones, pay or others' records.
+- Fix: a sign-in made right after a sign-out on the same phone could be
+  undone by the still-finishing sign-out; sign-in now waits for it.
+
+Tests: packages.test.js (27); all suites re-run on fresh emulators
+(packages 27, sessions 30, clients 61, import 25, security 73, checklist 77,
+live 12, whatsapp 10, image 14, leavesite 14, unit 14 = 363).

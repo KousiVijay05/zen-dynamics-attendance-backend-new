@@ -9,6 +9,7 @@
 import { state, emitChange } from "../core/store.js";
 import { sset } from "../storage/storage-api.js";
 import { num, uid } from "../utils/format.js";
+import { DEFAULT_BATCHES, DEFAULT_PACKAGES } from "./clients.js";
 
 function saveCfg() { return sset("org:config", state.cfg, true); }
 
@@ -71,15 +72,35 @@ export function deleteShift(id) {
 }
 
 /* ---------- client batches (time slots for client sessions) ---------- */
+export function addPackage(f) {
+  var name = (f.name || "").trim(), type = f.type === "pack" ? "pack" : "time";
+  var months = Math.round(num(f.months, 0)), days = Math.round(num(f.days, 0)), sessions = Math.round(num(f.sessions, 0)), fee = num(f.fee, 0);
+  if (!name) throw new Error("Enter the package name.");
+  if (type === "time" && !months && !days) throw new Error("Give a validity in months or days.");
+  if (type === "pack" && (sessions < 1 || sessions > 500)) throw new Error("Sessions must be between 1 and 500.");
+  if (fee < 0) throw new Error("Enter a valid fee.");
+  if (!Array.isArray(state.cfg.packages)) state.cfg.packages = DEFAULT_PACKAGES.slice();
+  var k = { id: uid(), group: (f.group || "").trim() || (type === "pack" ? "Sessions" : "Monthly"), name: name.slice(0, 60), type: type, fee: fee };
+  if (type === "pack") k.sessions = sessions;
+  if (days) k.days = days; else if (months) k.months = months;
+  state.cfg.packages.push(k);
+  return saveCfg().then(function () { return "Package added."; });
+}
+export function deletePackage(id) {
+  if (!Array.isArray(state.cfg.packages)) state.cfg.packages = DEFAULT_PACKAGES.slice();
+  state.cfg.packages = state.cfg.packages.filter(function (k) { return k.id !== id; });
+  return saveCfg().then(function () { return "Package removed (clients already on it keep their plan)."; });
+}
+
 export function addBatch(fields) {
   var name = (fields.name || "").trim(), start = (fields.start || "").trim(), end = (fields.end || "").trim();
   if (!name || !start) throw new Error("Enter the batch name and start time.");
-  if (!Array.isArray(state.cfg.batches)) state.cfg.batches = [];
+  if (!Array.isArray(state.cfg.batches)) state.cfg.batches = DEFAULT_BATCHES.slice();
   state.cfg.batches.push({ id: uid(), name: name.slice(0, 40), start: start, end: end });
   return saveCfg().then(function () { return "Batch added."; });
 }
 export function deleteBatch(id) {
-  state.cfg.batches = (state.cfg.batches || []).filter(function (b) { return b.id !== id; });
+  state.cfg.batches = (Array.isArray(state.cfg.batches) ? state.cfg.batches : DEFAULT_BATCHES.slice()).filter(function (b) { return b.id !== id; });
   return saveCfg().then(function () { return "Batch removed (past sessions keep its name)."; });
 }
 

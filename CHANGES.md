@@ -939,3 +939,8 @@ live 12, whatsapp 10, image 14, leavesite 14, unit 14 = 363).
 - Tested locally with the real files (counts only, data wiped). All of
   October (₹66,700) is added as new. September's unmatched ₹37,200 is
   opt-in, and the book shows ₹45,200 more than the register for that month.
+
+## 2026-10-10 — Batch list shows each time once (v33)
+
+- The batch picker no longer repeats the time ("6–7 AM · 6:00 AM–7:00 AM"
+  is now "6–7 AM"). Times are added only when a batch name has none.

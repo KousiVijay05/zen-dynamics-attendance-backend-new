@@ -63,7 +63,7 @@ function overview() {
   var sug = suggestedBatch();
   var html = '<div class="card"><h3>Start a session</h3>' +
     '<div class="field"><label for="cl_batch">Batch</label><select id="cl_batch">' +
-      bs.map(function (b) { return '<option value="' + esc(b.id) + '"' + (sug && sug.id === b.id ? " selected" : "") + ">" + esc(b.name) + " · " + esc(hm12(b.start)) + (b.end ? "–" + esc(hm12(b.end)) : "") + "</option>"; }).join("") +
+      bs.map(function (b) { return '<option value="' + esc(b.id) + '"' + (sug && sug.id === b.id ? " selected" : "") + ">" + esc(b.name) + (/\d/.test(b.name) ? "" : " · " + esc(hm12(b.start)) + (b.end ? "–" + esc(hm12(b.end)) : "")) + "</option>"; }).join("") +
       '<option value="general"' + (bs.length ? "" : " selected") + ">General session (no batch)</option></select></div>" +
     '<div class="field"><label for="cl_coach">Coach</label><select id="cl_coach">' +
       coachList().map(function (x) { return '<option value="' + esc(x.id) + '"' + (state.me && x.id === state.me.id ? " selected" : "") + ">" + esc(x.name) + (state.me && x.id === state.me.id ? " (me)" : "") + "</option>"; }).join("") +

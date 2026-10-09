@@ -31,6 +31,10 @@ import {
 } from "../domain/org.js";
 import { exportExcel } from "../domain/excel.js";
 import { requestLeave, cancelLeave, decideLeave, allLeaves } from "../domain/leave.js";
+import {
+  toggleTick, addClient, updateClient, renewClient, setClientActive, reminderText, waLinkTo, clientPhone,
+  loadMonth, exportClientsExcel, today as clToday
+} from "../domain/clients.js";
 import { dailyReport, weeklyReport, monthlyReport, leaveMessage } from "../domain/reports.js";
 import { shareWhatsApp, shareImage } from "../utils/whatsapp.js";
 import { attendanceSheet } from "../domain/reports.js";
@@ -55,7 +59,15 @@ function closePreview() {
 export function initEvents() {
   var root = $("root");
 
+  /* client search: filter as you type (the field keeps focus — see ui/render.js) */
+  root.addEventListener("input", function (ev) {
+    if (ev.target.id === "cl_search") { state.clSearch = ev.target.value; emitChange(); }
+  });
+
   root.addEventListener("change", function (ev) {
+    if (ev.target.id === "cl_month") { state.clMonth = ev.target.value; emitChange(); loadMonth(state.clMonth); }
+    if (ev.target.id === "ca_type") { state.clAddType = ev.target.value; emitChange(); }
+    if (ev.target.id === "cr_type") { state.clRenewType = ev.target.value; emitChange(); }
     if (ev.target.id === "p_month" || ev.target.id === "r_month") {
       state.month = ev.target.value; emitChange(); loadAdminData();
     }
@@ -322,6 +334,67 @@ tasks: selectedTasks
     if (act === "wa-dismiss") {
       try { localStorage.setItem(sharedKey(dayKey(Date.now()), id), "1"); } catch (e) {}
       emitChange();
+      return;
+    }
+
+    /* ---------- clients ---------- */
+    if (act === "cl-open") { state.clBack = state.view; state.view = "clients"; state.msg = ""; emitChange(); return; }
+    if (act === "cl-back") { state.view = state.clBack === "admin" ? "admin" : "staff"; state.msg = ""; state.clSearch = ""; emitChange(); return; }
+    if (act === "cl-tick") {
+      toggleTick(id).then(function () { state.msg = ""; }).catch(function (err) { say(err.message); });
+      return;
+    }
+    if (act === "cl-sub") {
+      state.clSub = v; state.clEdit = null; state.clRenewType = null; state.msg = ""; state.clSearch = "";
+      emitChange();
+      if (v === "report") loadMonth(state.clMonth || clToday().slice(0, 7));
+      return;
+    }
+    if (act === "cl-edit") { state.clEdit = id; state.clRenewType = null; state.msg = ""; emitChange(); window.scrollTo(0, 0); return; }
+    if (act === "cl-closeedit") { state.clEdit = null; state.clSub = "all"; state.msg = ""; emitChange(); return; }
+    if (act === "cl-add") {
+      try {
+        var nf = Object.assign({ type: $("ca_type").value, months: ($("ca_months") || {}).value, sessions: ($("ca_sessions") || {}).value, start: $("ca_start").value, amount: $("ca_amount").value, mode: $("ca_mode").value }, { name: $("ca_name").value, phone: $("ca_phone").value, notes: $("ca_notes").value });
+        addClient(nf).then(function (msg) {
+          clearFields(["ca_name", "ca_phone", "ca_notes", "ca_months", "ca_sessions", "ca_amount"]);
+          sayAndPaint(msg, true);
+        }).catch(function (err) { say(err.message); });
+      } catch (err) { say(err.message); }
+      return;
+    }
+    if (act === "cl-renew") {
+      try {
+        renewClient(id, { type: $("cr_type").value, months: ($("cr_months") || {}).value, sessions: ($("cr_sessions") || {}).value, start: $("cr_start").value, amount: $("cr_amount").value, mode: $("cr_mode").value }).then(function (msg) {
+          clearFields(["cr_months", "cr_sessions", "cr_amount"]);
+          state.clRenewType = null; sayAndPaint(msg, true);
+        }).catch(function (err) { say(err.message); });
+      } catch (err) { say(err.message); }
+      return;
+    }
+    if (act === "cl-save") {
+      try {
+        updateClient(id, { name: $("ce_name").value, phone: $("ce_phone").value, notes: $("ce_notes").value })
+          .then(function (msg) { sayAndPaint(msg, true); }).catch(function (err) { say(err.message); });
+      } catch (err) { say(err.message); }
+      return;
+    }
+    if (act === "cl-toggle") {
+      var cc = state.clients.filter(function (x) { return x.id === id; })[0];
+      if (!cc) return;
+      if (cc.active !== false && !wConfirm("Turn off " + cc.name + "? They'll be hidden from the attendance list (history is kept).")) return;
+      setClientActive(id, cc.active === false).then(function (msg) { sayAndPaint(msg, true); }).catch(function (err) { say(err.message); });
+      return;
+    }
+    if (act === "cl-wa") {
+      var wc = state.clients.filter(function (x) { return x.id === id; })[0];
+      if (!wc || !clientPhone(id)) { say("Add this client's phone number first."); return; }
+      var link = waLinkTo(clientPhone(id), reminderText(wc));
+      var w = window.open(link, "_blank");
+      if (w) { try { w.opener = null; } catch (e) {} } else window.location.href = link;
+      return;
+    }
+    if (act === "cl-xlsx") {
+      try { say(exportClientsExcel(state.clMonth || clToday().slice(0, 7)), true); } catch (err) { say(err.message); }
       return;
     }
 

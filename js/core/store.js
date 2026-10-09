@@ -25,6 +25,9 @@ export var state = {
   logs: {}, adminLoaded: false,
   period: "week", month: ymKey(Date.now()), recPerson: "all",
   editId: null, editShiftId: null, adminOnly: false,
+  /* clients module (domain/clients.js) */
+  clients: [], clientPriv: {}, clAtt: {}, clPays: {}, clOld: {}, clLoaded: false,
+  clSub: "renew", clEdit: null, clSearch: "", clMonth: null, clAddType: "time", clRenewType: null, clBack: "staff",
   /* attendance image being previewed before sharing: { url, file, caption, key } */
   waPreview: null, waBusy: false,
   /* leave requests + decisions per staff id — see domain/leave.js */

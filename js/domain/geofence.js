@@ -44,12 +44,12 @@ export function startWatch() {
   navigator.geolocation.watchPosition(function (p) {
     geo.ok = true; geo.err = null;
     geo.lat = p.coords.latitude; geo.lng = p.coords.longitude; geo.acc = p.coords.accuracy || 0;
-    if ((state.view === "staff" || state.view === "signin") && !userIsTyping()) emitChange();
+    if ((state.view === "staff" || state.view === "signin" || state.view === "clients") && !userIsTyping()) emitChange();
   }, function (e) {
     geo.ok = false;
     geo.err = e.code === 1 ? "Location permission is off. Allow it in your browser settings."
       : "No location fix yet. Move outdoors and wait a moment.";
-    if ((state.view === "staff" || state.view === "signin") && !userIsTyping()) emitChange();
+    if ((state.view === "staff" || state.view === "signin" || state.view === "clients") && !userIsTyping()) emitChange();
   }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 });
 }
 
@@ -80,7 +80,7 @@ export function startTick() {
   fenceState.ticking = true;
   var lastMinute = -1;
   setInterval(function () {
-    if ((state.view === "staff" || state.view === "signin") && !userIsTyping()) emitChange();
+    if ((state.view === "staff" || state.view === "signin" || state.view === "clients") && !userIsTyping()) emitChange();
     /* admin: once a minute, so the "shift ended — share?" reminder appears on time */
     var m = new Date().getMinutes();
     if (state.view === "admin" && m !== lastMinute && !userIsTyping()) { lastMinute = m; emitChange(); }

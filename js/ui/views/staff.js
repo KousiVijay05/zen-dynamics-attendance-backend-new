@@ -30,6 +30,12 @@ import { leaveBalance, leavesFor } from "../../domain/leave.js";
 import { proxBlock, lockedBlock } from "../components/proximity.js";
 import { brandMark } from "../components/brand.js";
 import { icons } from "../components/icons.js";
+import { tickedToday } from "../../domain/clients.js";
+
+function clientCount() {
+  var on = state.clients.filter(function (c) { return c.active !== false; });
+  return on.filter(function (c) { return tickedToday(c.id); }).length + " of " + on.length + " in";
+}
 
 export function vStaff() {
   enforceBoundary();
@@ -218,6 +224,12 @@ export function vStaff() {
       btn +
       why +
     '</div>' +
+
+    '<button class="cl-launch" data-act="cl-open">' +
+      '<span class="cl-ico">' + icons.clock + '</span>' +
+      '<span><b>Client attendance</b><br><span>Tick the clients who came today' + (state.clLoaded ? ' · ' + clientCount() : '') + '</span></span>' +
+      '<span class="cl-go">›</span>' +
+    '</button>' +
 
     myMonth() +
     myHistory() +

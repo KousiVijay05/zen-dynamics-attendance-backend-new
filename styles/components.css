@@ -152,7 +152,7 @@
   position: static; margin: 4px 0 6px; padding: 4px; gap: 4px; background: var(--panel-2);
   border: 1px solid var(--line); border-radius: 999px; overflow: visible;
 }
-.tabs.seg .tab { flex: 1; border: 0; box-shadow: none; background: transparent; min-height: 36px; padding: 7px 10px; }
+.tabs.seg .tab { flex: 1 1 0; min-width: 0; border: 0; box-shadow: none; background: transparent; min-height: 36px; padding: 7px 4px; overflow: hidden; text-overflow: ellipsis; }
 .tabs.seg .tab.sel { background: var(--panel); color: var(--ink); box-shadow: var(--shadow-sm); }
 
 /* ---------- stat + tiles ---------- */
@@ -304,3 +304,28 @@ details.pay .net { font-weight: 800; font-variant-numeric: tabular-nums; white-s
 }
 .sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; font-size: 16px; }
 .sheet-img { display: block; width: 100%; height: auto; border-radius: var(--radius-lg); box-shadow: var(--shadow-md); border: 1px solid var(--line); }
+
+/* ---------- client attendance ---------- */
+.cl-launch {
+  width: 100%; display: flex; align-items: center; gap: 14px; text-align: left; cursor: pointer;
+  font-family: var(--sans); color: var(--ink); background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius-lg); padding: 14px 16px; margin: 0 0 4px; box-shadow: var(--shadow-sm);
+  transition: transform .12s var(--ease);
+}
+.cl-launch:active { transform: scale(.985); }
+.cl-launch b { font-size: 15.5px; }
+.cl-launch span span { font-size: 13px; color: var(--ink2); }
+.cl-launch > span:nth-child(2) { flex: 1; min-width: 0; line-height: 1.4; }
+.cl-ico { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: var(--hero); color: var(--gold); flex: 0 0 auto; }
+.cl-ico svg { width: 22px; height: 22px; }
+.cl-go { font-size: 26px; color: var(--ink3); line-height: 1; }
+
+.tick {
+  flex: 0 0 auto; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+  background: var(--panel); border: 2px solid var(--line); color: transparent; transition: all .15s var(--ease);
+}
+.tick svg { width: 24px; height: 24px; }
+.tick:active { transform: scale(.94); }
+.tick.on { background: var(--status-good); border-color: var(--status-good); color: #fff; box-shadow: 0 8px 18px -10px rgba(28, 122, 77, .9); }
+.cl-row.is-in { background: var(--status-good-soft); }
+.cl-row .tag { margin-left: 8px; }

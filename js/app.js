@@ -21,6 +21,7 @@ import { initEvents } from "./events/handlers.js";
 import { startWatch, startTick } from "./domain/geofence.js";
 import { enterAs, signOut } from "./domain/auth.js";
 import { loadLeaves } from "./domain/leave.js";
+import { watchTicks } from "./domain/clients.js";
 import { userIsTyping } from "./ui/dom.js";
 import { warmUpReportImage } from "./ui/reportImage.js";
 
@@ -77,6 +78,9 @@ window.addEventListener("storage-remote-change", function (ev) {
       if (k === "org:config") { if (v) state.cfg = withConfigDefaults(v); }
       else if (k === "org:public") { if (v && !state.me) state.cfg = withConfigDefaults(Object.assign({}, state.cfg, v)); }
       else if (k === "org:roster") { if (Array.isArray(v)) applyRoster(v); }
+      else if (k === "cl:roster") { state.clients = Array.isArray(v) ? v : []; watchTicks(); }
+      else if (k === "cl:private") { state.clientPriv = v || {}; }
+      else if (k.indexOf("cl:pay:") === 0) { state.clPays[k] = Array.isArray(v) ? v : []; }
       else if (state.me && k === "profile:" + state.me.id) applyProfile(v);
       else if (k in state.logs) state.logs[k] = v || [];
     });

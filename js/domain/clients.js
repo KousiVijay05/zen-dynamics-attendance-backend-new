@@ -1,0 +1,339 @@
+/* ---------------------------------------------------------------
+   Clients: membership plans, daily attendance ticks, renewals and
+   payments.
+
+   Storage (who can read/write is enforced by firebase/database.rules.json):
+     kv/cl:roster          [client]  — every coach reads (names + plan
+                                       status), admins write
+     kv/cl:private         { id: { phone, notes, history: [plan] } }
+                                     — admins only (phone numbers)
+     kv/cl:pay:<yyyymm>    [payment] — admins only
+     clatt/<yyyymmdd>/<id> { by: staffId, at: ms }
+                                     — one tick per client per day; a coach
+                                       ticks in their own name and can only
+                                       untick their own; admins can do any
+
+   client = { id, name, active, joined, plan }
+   plan   = { type: "time",  name, start, end }            months-based
+          | { type: "pack",  name, start, sessions, end? } N visits, optional
+                                                            validity end date
+   A session pack uses one session per day ticked from its start date
+   (to its end date, if it has one).
+----------------------------------------------------------------*/
+
+import { state, emitChange } from "../core/store.js";
+import { sget } from "../storage/storage-api.js";
+import { uid, dayKey, shortDate, num, ymKey } from "../utils/format.js";
+
+function A() { return window.storageAuth; }
+var DAY = 864e5;
+
+export var PAY_MODES = ["Cash", "UPI", "Card", "Bank transfer", "Other"];
+
+export function today() { return dayKey(Date.now()); }
+function k8(d) { return d.replace(/-/g, ""); }                 // "2026-10-09" -> "20261009"
+
+/* ---------- loading + live updates ---------- */
+
+var unwatch = null, watchFrom = null;
+
+/** Load the client list (and, for admins, phones/notes), then watch ticks live. */
+export function loadClients() {
+  var jobs = [sget("cl:roster", true).then(function (r) { state.clients = Array.isArray(r) ? r : []; })];
+  if (state.me && state.me.admin) jobs.push(sget("cl:private", true).then(function (p) { state.clientPriv = p || {}; }));
+  return Promise.all(jobs).then(function () { watchTicks(); state.clLoaded = true; emitChange(); });
+}
+
+/* Ticks are watched from the earliest active plan's start (so session packs
+   count correctly), and at least the last 62 days. */
+export function watchTicks() {
+  var from = dayKey(Date.now() - 62 * DAY);
+  state.clients.forEach(function (c) {
+    if (c.active !== false && c.plan && c.plan.start && c.plan.start < from) from = c.plan.start;
+  });
+  from = k8(from);
+  if (unwatch && from === watchFrom) return;
+  if (unwatch) unwatch();
+  watchFrom = from;
+  unwatch = A().watch("clatt", from, function (v) { state.clAtt = v; emitChange(); });
+}
+
+export function stopClients() {
+  if (unwatch) unwatch();
+  unwatch = null; watchFrom = null;
+  state.clients = []; state.clientPriv = {}; state.clAtt = {}; state.clPays = {}; state.clOld = {}; state.clLoaded = false;
+}
+
+/* ---------- plans + status ---------- */
+
+/** "yyyy-mm-dd" + n months, minus one day: a 1-month plan from 9 Oct ends 8 Nov. */
+export function planEnd(start, months) {
+  var d = new Date(start + "T00:00:00");
+  var y = d.getFullYear(), m = d.getMonth() + months, day = d.getDate();
+  var last = new Date(y, m + 1, 0).getDate();
+  var r = new Date(y, m, Math.min(day, last));
+  r.setDate(r.getDate() - 1);
+  return dayKey(r.getTime());
+}
+
+/** Build a plan from form fields. Throws with a readable message on bad input. */
+export function makePlan(f) {
+  var start = (f.start || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) throw new Error("Pick the plan's start date.");
+  if (f.type === "pack") {
+    var n = Math.round(num(f.sessions, 0));
+    if (n < 1 || n > 500) throw new Error("Sessions must be between 1 and 500.");
+    var vm = Math.round(num(f.months, 0));
+    if (vm < 0 || vm > 36) throw new Error("Validity must be 0–36 months (0 = no expiry date).");
+    var p = { type: "pack", name: n + " sessions", start: start, sessions: n };
+    if (vm) { p.end = planEnd(start, vm); p.name += " · " + vm + " month" + (vm === 1 ? "" : "s"); }
+    return p;
+  }
+  var months = Math.round(num(f.months, 0));
+  if (months < 1 || months > 36) throw new Error("Months must be between 1 and 36.");
+  return { type: "time", name: months + " month" + (months === 1 ? "" : "s"), start: start, end: planEnd(start, months) };
+}
+
+/** Days `c` was ticked within its current plan. */
+export function usedSessions(c) {
+  if (!c.plan) return 0;
+  var s = k8(c.plan.start), e = c.plan.end ? k8(c.plan.end) : "99999999", n = 0;
+  Object.keys(state.clAtt || {}).forEach(function (d) {
+    if (d >= s && d <= e && state.clAtt[d] && state.clAtt[d][c.id]) n++;
+  });
+  return n;
+}
+
+/* "30 Sep", or "30 Sep 2027" when it isn't this year */
+function dateLabel(k) { return shortDate(k) + (k.slice(0, 4) !== today().slice(0, 4) ? " " + k.slice(0, 4) : ""); }
+
+function daysBetween(a, b) { return Math.round((new Date(b + "T00:00:00") - new Date(a + "T00:00:00")) / DAY); }
+
+/**
+ * { kind: "active" | "soon" | "expired" | "future" | "none" | "off", label, short }
+ * "soon" = ends within 7 days, or 2 or fewer sessions left.
+ */
+export function clientStatus(c) {
+  if (c.active === false) return { kind: "off", label: "Turned off", short: "Off" };
+  var p = c.plan, t = today();
+  if (!p) return { kind: "none", label: "No plan yet", short: "No plan" };
+  if (p.start > t) return { kind: "future", label: "Starts " + dateLabel(p.start), short: "Starts " + dateLabel(p.start) };
+  var daysLeft = p.end ? daysBetween(t, p.end) : null;
+  if (p.type === "pack") {
+    var left = p.sessions - usedSessions(c);
+    if (left <= 0) return { kind: "expired", label: "All " + p.sessions + " sessions used", short: "No sessions left", left: 0 };
+    if (daysLeft !== null && daysLeft < 0) return { kind: "expired", label: "Expired " + dateLabel(p.end) + " (" + left + " unused)", short: "Expired", left: left };
+    var txt = left + " session" + (left === 1 ? "" : "s") + " left" + (daysLeft !== null ? " · till " + dateLabel(p.end) : "");
+    if (left <= 2 || (daysLeft !== null && daysLeft <= 7)) return { kind: "soon", label: txt, short: left + " left", left: left, daysLeft: daysLeft };
+    return { kind: "active", label: txt, short: left + " left", left: left, daysLeft: daysLeft };
+  }
+  if (daysLeft < 0) return { kind: "expired", label: "Expired " + dateLabel(p.end), short: "Expired", daysLeft: daysLeft };
+  var lab = daysLeft === 0 ? "Ends today" : daysLeft + " day" + (daysLeft === 1 ? "" : "s") + " left · till " + dateLabel(p.end);
+  if (daysLeft <= 7) return { kind: "soon", label: lab, short: daysLeft === 0 ? "Ends today" : daysLeft + "d left", daysLeft: daysLeft };
+  return { kind: "active", label: "Till " + dateLabel(p.end), short: "Till " + dateLabel(p.end), daysLeft: daysLeft };
+}
+
+/* ---------- ticks (coaches and admins) ---------- */
+
+export function tickedToday(id) { var d = (state.clAtt || {})[k8(today())]; return d ? d[id] || null : null; }
+
+/** Tick / untick a client for today. Optimistic; the database confirms. */
+export function toggleTick(id) {
+  var day = k8(today()), cur = tickedToday(id);
+  if (cur && cur.by !== state.me.id && !state.me.admin) {
+    return Promise.reject(new Error("Another coach ticked this client — only they or an admin can untick it."));
+  }
+  var val = cur ? null : { by: state.me.id, at: Date.now() };
+  state.clAtt[day] = Object.assign({}, state.clAtt[day] || {});
+  if (val) state.clAtt[day][id] = val; else delete state.clAtt[day][id];
+  emitChange();
+  return A().setPath("clatt/" + day + "/" + id, val).catch(function (err) {
+    if (cur) state.clAtt[day][id] = cur; else delete state.clAtt[day][id];   // undo
+    emitChange();
+    throw err;
+  });
+}
+
+/* ---------- admin: add / edit / renew ---------- */
+
+function cleanPhone(p) {
+  var s = String(p || "").trim();
+  if (!s) return "";
+  var d = s.replace(/[^\d+]/g, "");
+  if (!/^\+?\d{10,15}$/.test(d)) throw new Error("Enter a valid phone number (10 digits, or with country code).");
+  return d;
+}
+
+function payRecord(c, plan, f) {
+  var amount = num(f.amount, 0);
+  if (amount < 0 || amount > 10000000) throw new Error("Enter a valid amount.");
+  if (!amount) return null;
+  var mode = PAY_MODES.indexOf(f.mode) >= 0 ? f.mode : "Cash";
+  var date = /^\d{4}-\d{2}-\d{2}$/.test(f.payDate || "") ? f.payDate : today();
+  return { id: uid(), clientId: c.id, name: c.name, plan: plan.name, start: plan.start, end: plan.end || null,
+           amount: Math.round(amount * 100) / 100, mode: mode, date: date, by: state.me.name, at: Date.now() };
+}
+
+/* One all-or-nothing write of the list, the private details and (maybe) a payment. */
+function save(roster, priv, pay) {
+  var paths = {};
+  paths["kv/cl:roster"] = JSON.stringify(roster);
+  paths["kv/cl:private"] = JSON.stringify(priv);
+  var payKey = null;
+  if (pay) {
+    payKey = "cl:pay:" + pay.date.slice(0, 7).replace("-", "");
+    return sget(payKey, true).then(function (list) {
+      list = (Array.isArray(list) ? list : []).concat([pay]);
+      paths["kv/" + payKey] = JSON.stringify(list);
+      return A().update(paths).then(function () { state.clPays[payKey] = list; });
+    });
+  }
+  return A().update(paths);
+}
+
+export function addClient(f) {
+  var name = (f.name || "").trim();
+  if (!name) throw new Error("Enter the client's name.");
+  if (name.length > 80) throw new Error("That name is too long.");
+  var phone = cleanPhone(f.phone);
+  if (state.clients.some(function (c) { return c.name.toLowerCase() === name.toLowerCase() && c.active !== false; }) && !f.allowDuplicate) {
+    throw new Error("A client called " + name + " already exists. Add a surname or initial to tell them apart.");
+  }
+  var plan = makePlan(f);
+  var c = { id: uid(), name: name, active: true, joined: today(), plan: plan };
+  var pay = payRecord(c, plan, f);
+  var roster = state.clients.concat([c]);
+  var priv = Object.assign({}, state.clientPriv);
+  priv[c.id] = { phone: phone, notes: (f.notes || "").trim().slice(0, 500), history: [] };
+  return save(roster, priv, pay).then(function () {
+    state.clients = roster; state.clientPriv = priv; watchTicks(); emitChange();
+    return name + " added" + (pay ? " · payment of " + pay.amount + " recorded." : ".");
+  });
+}
+
+export function updateClient(id, f) {
+  var c = state.clients.filter(function (x) { return x.id === id; })[0];
+  if (!c) throw new Error("That client no longer exists.");
+  var name = (f.name || "").trim();
+  if (!name) throw new Error("Enter the client's name.");
+  var phone = cleanPhone(f.phone);
+  var roster = state.clients.map(function (x) { return x.id === id ? Object.assign({}, x, { name: name }) : x; });
+  var priv = Object.assign({}, state.clientPriv);
+  priv[id] = Object.assign({ history: [] }, priv[id], { phone: phone, notes: (f.notes || "").trim().slice(0, 500) });
+  return save(roster, priv, null).then(function () { state.clients = roster; state.clientPriv = priv; emitChange(); return "Saved."; });
+}
+
+export function renewClient(id, f) {
+  var c = state.clients.filter(function (x) { return x.id === id; })[0];
+  if (!c) throw new Error("That client no longer exists.");
+  var plan = makePlan(f);
+  var pay = payRecord(c, plan, f);
+  var roster = state.clients.map(function (x) { return x.id === id ? Object.assign({}, x, { plan: plan, active: true }) : x; });
+  var priv = Object.assign({}, state.clientPriv);
+  var mine = Object.assign({ phone: "", notes: "", history: [] }, priv[id]);
+  if (c.plan) mine.history = (mine.history || []).concat([Object.assign({ used: usedSessions(c) }, c.plan)]).slice(-50);
+  priv[id] = mine;
+  return save(roster, priv, pay).then(function () {
+    state.clients = roster; state.clientPriv = priv; watchTicks(); emitChange();
+    return "Renewed: " + plan.name + " from " + shortDate(plan.start) + (pay ? " · payment recorded." : ".");
+  });
+}
+
+export function setClientActive(id, on) {
+  var roster = state.clients.map(function (x) { return x.id === id ? Object.assign({}, x, { active: !!on }) : x; });
+  return save(roster, state.clientPriv, null).then(function () { state.clients = roster; emitChange(); return on ? "Client restored." : "Client turned off."; });
+}
+
+/** The renewal "suggested" start: the day after the current plan ends (if still ahead), else today. */
+export function suggestedStart(c) {
+  var t = today();
+  if (c && c.plan && c.plan.end && c.plan.end >= t) return dayKey(new Date(c.plan.end + "T12:00:00").getTime() + DAY);
+  return t;
+}
+
+/* ---------- WhatsApp reminder to a client ---------- */
+
+export function clientPhone(id) { return ((state.clientPriv || {})[id] || {}).phone || ""; }
+
+export function reminderText(c) {
+  var st = clientStatus(c), org = (state.cfg && state.cfg.org) || "the gym";
+  var first = c.name.split(" ")[0];
+  var line = st.kind === "expired"
+    ? (c.plan && c.plan.type === "pack" && st.left === 0 ? "you've used all the sessions in your " + c.plan.name + " plan." : "your " + (c.plan ? c.plan.name + " " : "") + "membership ended on " + dateLabel(c.plan.end) + ".")
+    : c.plan && c.plan.type === "pack"
+      ? "you have " + st.left + " session" + (st.left === 1 ? "" : "s") + " left in your " + c.plan.name + " plan" + (c.plan.end ? " (valid till " + dateLabel(c.plan.end) + ")" : "") + "."
+      : "your " + (c.plan ? c.plan.name + " " : "") + "membership ends on " + dateLabel(c.plan.end) + ".";
+  return "Hi " + first + ", greetings from " + org + "! 🙏\n\nA friendly reminder: " + line +
+    "\n\nRenew to keep your training going — just reply here or speak to us at the gym.\n\nThank you! 💪";
+}
+
+/** wa.me link straight to the client's chat (Indian numbers get +91 when 10 digits). */
+export function waLinkTo(phone, text) {
+  var d = String(phone || "").replace(/[^\d]/g, "");
+  if (d.length === 10) d = "91" + d;
+  return "https://wa.me/" + d + "?text=" + encodeURIComponent(text);
+}
+
+/* ---------- reports ---------- */
+
+/** Ticks for month ym ("yyyy-mm"): from the live watch if covered, else read once. */
+export function loadMonth(ym) {
+  var from = ym.replace("-", "") + "01", to = ym.replace("-", "") + "31";
+  var payKey = "cl:pay:" + ym.replace("-", "");
+  var jobs = [sget(payKey, true).then(function (v) { state.clPays[payKey] = Array.isArray(v) ? v : []; })];
+  if (!watchFrom || from < watchFrom) {
+    jobs.push(A().readRange("clatt", from, to).then(function (v) { state.clOld[ym] = v; }));
+  }
+  return Promise.all(jobs).then(emitChange);
+}
+
+export function monthReport(ym) {
+  var from = ym.replace("-", "") + "01", to = ym.replace("-", "") + "31";
+  var src = (watchFrom && from >= watchFrom) ? state.clAtt : (state.clOld[ym] || {});
+  var visits = {}, days = 0, total = 0, byCoach = {};
+  Object.keys(src || {}).forEach(function (d) {
+    if (d < from || d > to) return;
+    var n = 0;
+    Object.keys(src[d] || {}).forEach(function (cid) {
+      visits[cid] = (visits[cid] || 0) + 1; n++; total++;
+      var by = src[d][cid].by; byCoach[by] = (byCoach[by] || 0) + 1;
+    });
+    if (n) days++;
+  });
+  var pays = (state.clPays["cl:pay:" + ym.replace("-", "")] || []).slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+  var byMode = {}, revenue = 0;
+  pays.forEach(function (p) { revenue += p.amount; byMode[p.mode] = (byMode[p.mode] || 0) + p.amount; });
+  return { visits: visits, totalVisits: total, daysWithVisits: days, byCoach: byCoach, payments: pays, revenue: revenue, byMode: byMode };
+}
+
+/** Excel: clients, the month's visits (one row per tick) and payments. */
+export function exportClientsExcel(ym) {
+  if (typeof XLSX === "undefined") throw new Error("Excel library didn't load. Check the connection and reload.");
+  var r = monthReport(ym), wb = XLSX.utils.book_new();
+  var name = function (id) { var c = state.clients.filter(function (x) { return x.id === id; })[0]; return c ? c.name : "(removed)"; };
+  var coach = function (id) { var p = state.roster.filter(function (x) { return x.id === id; })[0]; return p ? p.name : ""; };
+  var clients = [["Client", "Phone", "Plan", "Type", "Start", "End", "Sessions", "Used", "Status", "Visits in " + ym]];
+  state.clients.forEach(function (c) {
+    var st = clientStatus(c), p = c.plan || {};
+    clients.push([c.name, clientPhone(c.id), p.name || "", p.type === "pack" ? "Session pack" : p.type ? "Time" : "",
+      p.start || "", p.end || "", p.sessions || "", p.type === "pack" ? usedSessions(c) : "", st.label, r.visits[c.id] || 0]);
+  });
+  var visits = [["Date", "Client", "Ticked by", "Time"]];
+  var src = (watchFrom && (ym.replace("-", "") + "01") >= watchFrom) ? state.clAtt : (state.clOld[ym] || {});
+  Object.keys(src).sort().forEach(function (d) {
+    if (d.slice(0, 6) !== ym.replace("-", "")) return;
+    Object.keys(src[d]).forEach(function (cid) {
+      var t = src[d][cid];
+      visits.push([d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6), name(cid), coach(t.by), new Date(t.at).toLocaleTimeString()]);
+    });
+  });
+  var pays = [["Date", "Client", "Plan", "From", "To", "Amount", "Mode", "Recorded by"]];
+  r.payments.forEach(function (p) { pays.push([p.date, p.name, p.plan, p.start, p.end || "", p.amount, p.mode, p.by]); });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(clients), "Clients");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(visits), "Visits");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(pays), "Payments");
+  XLSX.writeFile(wb, "clients-" + ym + ".xlsx");
+  return "Workbook downloaded.";
+}
+
+export function defaultMonth() { return ymKey(Date.now()); }

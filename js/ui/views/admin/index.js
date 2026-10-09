@@ -8,6 +8,7 @@ import { tabPayroll } from "./payroll.js";
 import { tabSite } from "./settings.js";
 import { tabShifts } from "./shifts.js";
 import { tabLeaveAdmin } from "./leave.js";
+import { tabClients } from "./clients.js";
 import { brandMark } from "../../components/brand.js";
 import { icons } from "../../components/icons.js";
 import { endedShifts } from "../../../domain/reports.js";
@@ -42,7 +43,7 @@ function previewSheet() {
     '</div></div>';
 }
 
-var TABS = ["onsite:On site", "people:People", "shifts:Shifts", "leave:Leave", "records:Records", "payroll:Payroll", "site:Settings"];
+var TABS = ["onsite:On site", "clients:Clients", "people:People", "shifts:Shifts", "leave:Leave", "records:Records", "payroll:Payroll", "site:Settings"];
 
 export function vAdmin() {
   var head = '<div class="bar"><div class="idn">' + brandMark() + '<div><div class="nm">' + esc(state.cfg.org) + "</div>" +
@@ -56,6 +57,7 @@ export function vAdmin() {
   head += reminder();
   var tail = previewSheet();
   if (state.tab === "onsite") return head + tabOnsite() + tail;
+  if (state.tab === "clients") return head + tabClients() + tail;
   if (state.tab === "people") return head + tabPeople() + tail;
   if (state.tab === "shifts") return head + tabShifts() + tail;
   if (state.tab === "leave") return head + tabLeaveAdmin() + tail;

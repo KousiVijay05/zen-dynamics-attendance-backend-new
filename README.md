@@ -75,7 +75,8 @@ free **Spark** plan.
 
 - **Data**: Realtime Database, at `/kv` (one JSON string per key), plus
   the membership records `/uidmap`, `/admins`, `/mustchange`, `/logins`
-  (see the header of `js/storage/storage-firebase.js`).
+  (see the header of `js/storage/storage-firebase.js`), and client
+  attendance ticks at `/clatt` (see `js/domain/clients.js`).
 - **Sign-in**: Firebase Authentication, email/password. A person's account
   email is `<user ID>@zen-dynamics-attendance-a2f73.firebaseapp.com` (or
   with a `+suffix` after a password reset). Nothing is ever emailed to it.

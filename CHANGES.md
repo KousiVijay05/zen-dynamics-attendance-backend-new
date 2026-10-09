@@ -760,3 +760,38 @@ The dark header, clock card, sign-in panel and summary card used a warm
 near-black with a strong gold glow, which read as muddy brown on many
 screens. Now a neutral deep black (#0A0A0A → #1A1A1A) with only a faint
 gold highlight. Colours only; nothing else changed.
+
+## 2026-10-09 — Clients module (v26)
+
+**Coaches** — a "Client attendance" card on the home screen opens the list:
+search, one tap ✓ per client for today, each client's plan status
+("12 days left", "3 left", "Expired"), and who ticked whom. Locked outside the
+gym like clocking in. One tick per client per day; a coach can only untick
+their own ticks. Coaches never see phone numbers or payments.
+
+**Admin → Clients**
+- Renewals: active / ending soon (≤ 7 days or ≤ 2 sessions) / expired counts,
+  money collected this month; lists with *Remind on WhatsApp* (opens the
+  client's chat with a reminder; you press send) and *Renew*.
+- Clients: search, open a client: renew (new plan + payment), edit name /
+  phone / notes, turn off/restore, previous plans with sessions used.
+- Add: name, phone, plan (months, or a session pack with optional validity),
+  start date, amount paid + mode (Cash / UPI / Card / Bank transfer / Other).
+- Reports: visits per client, payments, totals by mode, Excel (Clients,
+  Visits, Payments sheets).
+
+**Plans**: a 1-month plan from 9 Oct ends 8 Oct next month (31st clamps to
+the month's last day). A session pack uses one session per day ticked from
+its start (to its validity end, if set). Renewing an active plan suggests
+starting the day after it ends.
+
+**Storage & rules**: `kv/cl:roster` (names + plans; members read, admins
+write), `kv/cl:private` (phones, notes, plan history; admins only),
+`kv/cl:pay:<yyyymm>` (payments; admins only), `clatt/<yyyymmdd>/<id>`
+(`{by, at}`; a member may add a tick in their own name or remove their own;
+admins anything; no other fields; `at` can't be in the future).
+
+Tests: 46 new (clients.test.js) — validation, renewals, WhatsApp link,
+coach ticks, direct database attacks by a coach and by a stranger, session
+counting, renew + history + payments, reports, Excel, outside-the-gym lock,
+320 px layout; all other suites re-run (246 checks total).

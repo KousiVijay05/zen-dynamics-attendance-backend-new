@@ -1,18 +1,18 @@
 /* Bump CACHE whenever you change any app file, otherwise phones keep
-   serving the old version. v25: cleaner black (no brown tint). v24: sign staff out when they leave the site. v23: attendance image + shift-end reminder. v22: moved to zenanddynamics.web.app. v21: fixes from full testing. v20: redesigned look. v19: old Google Sheets code removed. v18: WhatsApp share buttons. v17: Firebase Authentication + per-user database
+   serving the old version. v26: clients module. v25: cleaner black (no brown tint). v24: sign staff out when they leave the site. v23: attendance image + shift-end reminder. v22: moved to zenanddynamics.web.app. v21: fixes from full testing. v20: redesigned look. v19: old Google Sheets code removed. v18: WhatsApp share buttons. v17: Firebase Authentication + per-user database
    rules. v16: per-shift lateness + live admin screens. v15: backend moved from
    Google Apps Script to Firebase Realtime Database (see CHANGES.md). */
-const CACHE = "attendance-v25";
+const CACHE = "attendance-v26";
 const ASSETS = [
   "./", "./index.html", "./manifest.json",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/mark.png", "./icons/logo-lockup.png",
 
-  "./styles/tokens.css?v=18", "./styles/base.css?v=18",
-  "./styles/components.css?v=18", "./styles/views.css?v=18",
+  "./styles/tokens.css?v=19", "./styles/base.css?v=19",
+  "./styles/components.css?v=19", "./styles/views.css?v=19",
 
   "./js/app.js",
   "./js/core/config.js", "./js/core/store.js",
-  "./js/domain/attendance.js", "./js/domain/auth.js", "./js/domain/excel.js",
+  "./js/domain/attendance.js", "./js/domain/auth.js", "./js/domain/clients.js", "./js/domain/excel.js",
   "./js/domain/geofence.js", "./js/domain/leave.js", "./js/domain/org.js",
   "./js/domain/payroll.js", "./js/domain/reports.js", "./js/domain/roster.js",
   "./js/events/handlers.js",
@@ -23,7 +23,7 @@ const ASSETS = [
   "./js/ui/views/admin/index.js", "./js/ui/views/admin/leave.js", "./js/ui/views/admin/onsite.js",
   "./js/ui/views/admin/payroll.js", "./js/ui/views/admin/people.js", "./js/ui/views/admin/records.js",
   "./js/ui/views/admin/settings.js", "./js/ui/views/admin/shifts.js",
-  "./js/ui/views/changepw.js", "./js/ui/views/setup.js",
+  "./js/ui/views/changepw.js", "./js/ui/views/clientTick.js", "./js/ui/views/admin/clients.js", "./js/ui/views/setup.js",
   "./js/ui/views/signin.js", "./js/ui/views/staff.js",
   "./js/utils/format.js", "./js/utils/geomath.js", "./js/utils/whatsapp.js"
 ];

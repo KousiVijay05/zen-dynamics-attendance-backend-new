@@ -51,8 +51,32 @@
       },
       "$key": {
         ".read": "(auth != null && root.child('uidmap/' + auth.uid).exists()) && ($key === 'profile:' + root.child('uidmap/' + auth.uid).val() || $key === 'leave:' + root.child('uidmap/' + auth.uid).val() || $key === 'leavedec:' + root.child('uidmap/' + auth.uid).val() || $key.beginsWith('log:' + root.child('uidmap/' + auth.uid).val() + ':'))",
-        ".write": "$key.matches(/^((profile|leave|leavedec):[A-Za-z0-9_-]{1,64}|log:[A-Za-z0-9_-]{1,64}:[0-9]{6})$/) && ((auth != null && root.child('uidmap/' + auth.uid).isString() && root.child('admins/' + root.child('uidmap/' + auth.uid).val()).val() === true) || ((auth != null && !root.child('kv/org:public').exists()) && $key === 'profile:' + auth.uid) || ((auth != null && root.child('uidmap/' + auth.uid).exists()) && ($key === 'leave:' + root.child('uidmap/' + auth.uid).val() || $key.beginsWith('log:' + root.child('uidmap/' + auth.uid).val() + ':'))))",
-        ".validate": "newData.isString() && newData.val().length <= 200000"
+        ".write": "($key.matches(/^(cl:private|cl:pay:[0-9]{6})$/) && (auth != null && root.child('uidmap/' + auth.uid).isString() && root.child('admins/' + root.child('uidmap/' + auth.uid).val()).val() === true)) || ($key.matches(/^((profile|leave|leavedec):[A-Za-z0-9_-]{1,64}|log:[A-Za-z0-9_-]{1,64}:[0-9]{6})$/) && ((auth != null && root.child('uidmap/' + auth.uid).isString() && root.child('admins/' + root.child('uidmap/' + auth.uid).val()).val() === true) || ((auth != null && !root.child('kv/org:public').exists()) && $key === 'profile:' + auth.uid) || ((auth != null && root.child('uidmap/' + auth.uid).exists()) && ($key === 'leave:' + root.child('uidmap/' + auth.uid).val() || $key.beginsWith('log:' + root.child('uidmap/' + auth.uid).val() + ':')))))",
+        ".validate": "newData.isString() && newData.val().length <= 500000"
+      },
+      "cl:roster": {
+        ".read": "(auth != null && root.child('uidmap/' + auth.uid).isString())",
+        ".write": "(auth != null && root.child('uidmap/' + auth.uid).isString() && root.child('admins/' + root.child('uidmap/' + auth.uid).val()).val() === true)",
+        ".validate": "newData.isString() && newData.val().length <= 500000"
+      }
+    },
+    "clatt": {
+      ".read": "(auth != null && root.child('uidmap/' + auth.uid).isString())",
+      "$day": {
+        ".validate": "$day.matches(/^20[0-9]{6}$/)",
+        "$cid": {
+          ".write": "(auth != null && root.child('uidmap/' + auth.uid).isString() && root.child('admins/' + root.child('uidmap/' + auth.uid).val()).val() === true) || ((auth != null && root.child('uidmap/' + auth.uid).isString()) && ((!data.exists() && newData.child('by').val() === root.child('uidmap/' + auth.uid).val()) || (!newData.exists() && data.child('by').val() === root.child('uidmap/' + auth.uid).val())))",
+          ".validate": "$cid.matches(/^[A-Za-z0-9_-]{1,64}$/) && newData.hasChildren(['by', 'at']) && newData.child('by').isString() && newData.child('at').isNumber() && newData.child('at').val() <= now + 300000",
+          "by": {
+            ".validate": true
+          },
+          "at": {
+            ".validate": true
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
       }
     }
   }

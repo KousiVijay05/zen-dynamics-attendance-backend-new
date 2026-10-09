@@ -33,7 +33,8 @@
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import {
-  getDatabase, ref, onValue, set as fbSet, remove as fbRemove, get as fbGet, update as fbUpdate, connectDatabaseEmulator
+  getDatabase, ref, onValue, set as fbSet, remove as fbRemove, get as fbGet, update as fbUpdate, connectDatabaseEmulator,
+  query, orderByKey, startAt, endAt
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js";
 import {
   getAuth, initializeAuth, inMemoryPersistence, onAuthStateChanged, signInWithEmailAndPassword,
@@ -129,7 +130,12 @@ function subscribe(key) {
   return s.ready;
 }
 
+/* Live watches on non-/kv paths (client attendance ticks). Ended on sign-out. */
+var watches = [];
+function stopWatches() { watches.forEach(function (u) { try { u(); } catch (e) {} }); watches = []; }
+
 function unsubscribeAll(keepPublic) {
+  stopWatches();
   Object.keys(subs).forEach(function (k) {
     if (keepPublic && k === "org:public") return;
     try { subs[k].unsub(); } catch (e) {}
@@ -367,6 +373,23 @@ window.storageAuth = {
     return updatePassword(u, password).catch(function (err) { throw new Error(friendlyAuthError(err)); })
       .then(function () { return fbRemove(ref(db, "mustchange/" + who.staffId)); })
       .then(function () { who.mustChange = false; lsSet(whoKey(uid), JSON.stringify(who)); });
+  },
+
+  /** Live-watch `path` (keys from `fromKey` on, if given). cb(valueOrEmpty). -> unsubscribe() */
+  watch: function (path, fromKey, cb) {
+    var q = fromKey ? query(ref(db, path), orderByKey(), startAt(fromKey)) : ref(db, path);
+    var unsub = onValue(q, function (snap) { cb(snap.val() || {}); }, function (err) { lastError = err.message; cb({}); });
+    watches.push(unsub);
+    return function () { try { unsub(); } catch (e) {} watches = watches.filter(function (u) { return u !== unsub; }); };
+  },
+  /** One-time read of keys fromKey..toKey under `path`. */
+  readRange: function (path, fromKey, toKey) {
+    return fbGet(query(ref(db, path), orderByKey(), startAt(fromKey), endAt(toKey))).then(function (s) { return s.val() || {}; });
+  },
+  /** Set (or with null, remove) one database path. Works offline: the write is sent when the connection returns. */
+  setPath: function (path, value) {
+    var p = value === null ? fbRemove(ref(db, path)) : fbSet(ref(db, path), value);
+    return p.catch(function (err) { throw new Error(friendlyDbError(err)); });
   },
 
   loginKey: loginKey,

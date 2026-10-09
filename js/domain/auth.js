@@ -24,6 +24,7 @@ import { defaultPay, withConfigDefaults } from "../core/config.js";
 import { startWatch, startTick } from "./geofence.js";
 import { loadLog } from "./attendance.js";
 import { loadLeaves } from "./leave.js";
+import { loadClients, stopClients } from "./clients.js";
 
 export var PASSWORD_MIN = 6;   // Firebase Authentication's minimum
 var USERNAME_RE = /^[a-z0-9._-]{2,32}$/;
@@ -155,12 +156,14 @@ export function signIn(p) {
   return Promise.all([loadLog(p.id, Date.now()), loadLog(p.id, Date.now() - 40 * 864e5), loadLeaves(p.id)]).then(function () {
     emitChange();
     startWatch(); startTick();
+    loadClients().catch(function (e) { console.error("Clients didn't load:", e); });
   });
 }
 
 /** Ends the session on this device. `msg` (optional) is shown on the sign-in screen. */
 export function signOut(msg) {
   return A().signOut().then(function () {
+    stopClients();
     state.me = null; state.changePwFor = null; state.logs = {}; state.leaveData = {};
     state.adminLoaded = false; state.editId = null;
     state.roster = [];

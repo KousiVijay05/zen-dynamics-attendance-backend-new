@@ -711,3 +711,24 @@ new domain to Firebase Authentication's authorized domains.
 
 New: `js/ui/reportImage.js`; `attendanceSheet()` / `endedShifts()` in
 reports.js. Tests: 14 new (image + reminder) and all existing suites.
+
+## 2026-10-09 — Sign staff out when they leave the site (v24)
+
+- New setting, **on by default**: Admin → Settings → "Sign staff out when
+  they leave the site". After at least a minute continuously outside the
+  zone (and after any open shift has been closed automatically), the person
+  is signed out: "You left the gym, so you've been signed out." Admins are
+  exempt while "Administrators can sign in from anywhere" is on.
+- Outside means beyond the allowed distance *plus* the phone's reported GPS
+  accuracy (capped at 100 m), so a jumpy reading near the edge doesn't count.
+  This also applies to the existing automatic clock-out — slightly more
+  forgiving at the boundary than before (called out: affects when an
+  "auto" clock-out happens, not how hours are calculated).
+- Sign-out waits up to 5 s for a just-made punch to reach the server.
+- Fixed: a punch made with no signal, followed by signing out, was dropped
+  when the server refused it (no longer signed in). It's now kept and sent
+  when that person next signs in.
+- The "outside the site" sign-in screen now shows the sign-out message.
+
+Tests: 14 new (leaving mid-shift, brief GPS jump, admin exempt, setting
+off/on, no signal) plus all suites re-run: 73 + 77 + 12 + 10 + 14 + 14.

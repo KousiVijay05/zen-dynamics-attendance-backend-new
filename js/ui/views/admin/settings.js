@@ -17,6 +17,8 @@ export function tabSite() {
     '<div class="field"><label for="s_grace">Delay before auto clock-out (minutes)</label>' +
     '<input id="s_grace" class="num" type="number" min="0" max="60" value="' + state.cfg.graceMin + '" />' +
     '<span class="note">0 ends the shift the moment they cross the boundary.</span></div>' +
+    '<label class="check"><input type="checkbox" id="s_signout"' + (state.cfg.signOutOutside ? " checked" : "") + " />" +
+    "<div>Sign staff out when they leave the site<span>After a minute outside (and after their shift is closed). They sign in again when they're back.</span></div></label>" +
     '<label class="check"><input type="checkbox" id="s_anywhere"' + (state.cfg.adminAnywhere ? " checked" : "") + " />" +
     "<div>Administrators can sign in from anywhere<span>Lets you check records and payroll off site.</span></div></label>" +
     '<label class="check"><input type="checkbox" id="s_demo"' + (state.cfg.demo ? " checked" : "") + " />" +

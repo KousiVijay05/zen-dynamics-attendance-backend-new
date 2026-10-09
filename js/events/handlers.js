@@ -254,7 +254,7 @@ tasks: selectedTasks
         saveSiteSettings({
           org: $("s_org").value, lat: parseFloat($("s_lat").value), lng: parseFloat($("s_lng").value),
           radius: parseInt($("s_rad").value, 10), graceMin: $("s_grace").value,
-          lockOutside: $("s_lock").checked, adminAnywhere: $("s_anywhere").checked, demo: $("s_demo").checked
+          lockOutside: $("s_lock").checked, adminAnywhere: $("s_anywhere").checked, signOutOutside: $("s_signout").checked, demo: $("s_demo").checked
         }).then(function (msg) { say(msg, true); }).catch(function (err) { say(err.message); });
       } catch (err) { say(err.message); }
       return;

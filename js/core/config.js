@@ -29,6 +29,7 @@ export function withConfigDefaults(cfg) {
   if (cfg.lockOutside === undefined) cfg.lockOutside = true;
   if (cfg.adminAnywhere === undefined) cfg.adminAnywhere = true;
   if (cfg.graceMin === undefined) cfg.graceMin = 0;
+  if (cfg.signOutOutside === undefined) cfg.signOutOutside = true;   // sign staff out when they leave the site
   if (cfg.demo === undefined) cfg.demo = false;
   if (!Array.isArray(cfg.shifts)) cfg.shifts = [];
   if (cfg.pay.leavePerYear === undefined) cfg.pay.leavePerYear = 15;

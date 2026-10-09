@@ -14,6 +14,7 @@ import { sget, sset } from "../storage/storage-api.js";
 import { uid, dayKey, monKey, minsOfDay, parseHM } from "../utils/format.js";
 import { distanceNow } from "./geofence.js";
 import { loadLeaves } from "./leave.js";
+import { signOut } from "./auth.js";
 
 export function logKey(id, ts) { return "log:" + id + ":" + monKey(ts); }
 
@@ -203,13 +204,34 @@ export function loadAdminData() {
  * open shift and is outside the radius, starts (or continues) a
  * grace-period timer; once the grace period elapses, auto clock-out.
  */
+/* Minimum time continuously outside before signing someone out, so one
+   jumpy GPS reading can't do it. */
+var SIGN_OUT_AFTER_MS = 60000;
+
+/**
+ * Called on every staff-screen redraw (about once a second).
+ * Outside the zone (counting GPS accuracy in the person's favour, capped
+ * at 100 m) and still outside after the grace period:
+ *   1. an open shift is closed, tagged "auto" (unchanged behaviour);
+ *   2. if Settings → "Sign staff out when they leave the site" is on
+ *      (the default), they're signed out after at least a minute outside.
+ *      Admins are exempt when admins may use the app from anywhere.
+ */
 export function enforceBoundary() {
-  if (!state.me) return;
-  var o = openEntryFor(state.me.id);
-  if (!o) { fenceState.leftAt = null; return; }
+  if (!state.me || fenceState.signingOut) return;
   var d = distanceNow();
-  if (d === null || d <= state.cfg.site.radius) { fenceState.leftAt = null; return; }
-  var grace = state.cfg.graceMin * 60000;
+  var slack = Math.min(geo.acc || 0, 100);
+  if (d === null || d - slack <= state.cfg.site.radius) { fenceState.leftAt = null; return; }
   if (!fenceState.leftAt) fenceState.leftAt = Date.now();
-  if (Date.now() - fenceState.leftAt >= grace) clockOut(fenceState.leftAt, true);
+  var away = Date.now() - fenceState.leftAt;
+  var o = openEntryFor(state.me.id);
+  if (o && away >= state.cfg.graceMin * 60000) clockOut(fenceState.leftAt, true);
+  var exempt = state.me.admin && state.cfg.adminAnywhere;
+  if (state.cfg.signOutOutside && !exempt && !openEntryFor(state.me.id) &&
+      away >= Math.max(SIGN_OUT_AFTER_MS, state.cfg.graceMin * 60000)) {
+    fenceState.signingOut = true;
+    fenceState.leftAt = null;
+    signOut("You left the gym, so you've been signed out. Sign in again when you're back.")
+      .then(function () { fenceState.signingOut = false; }, function () { fenceState.signingOut = false; });
+  }
 }

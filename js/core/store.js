@@ -39,7 +39,7 @@ export var state = {
 export var geo = { ok: false, lat: 0, lng: 0, acc: 0, err: null };
 
 /** geofence timers/flags — module-level in the original, kept together here */
-export var fenceState = { leftAt: null, watching: false, ticking: false };
+export var fenceState = { leftAt: null, watching: false, ticking: false, signingOut: false };
 
 var listeners = [];
 

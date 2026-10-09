@@ -159,6 +159,10 @@ function send(item) {
     lastError = null;
   }).catch(function (err) {
     lastError = err.message;
+    /* Refused because the person who made it is no longer signed in on this
+       phone (e.g. a clock-out made with no signal, then signed out on
+       leaving the site)? Keep it: it's sent again when they next sign in. */
+    if (item.uid !== uid) { console.warn("Write for " + item.key + " kept until its owner signs in again."); return; }
     queue = queue.filter(function (q) { return q.seq !== item.seq; });
     saveQueue();
     console.error("Write rejected for " + item.key + ":", err);
@@ -296,9 +300,21 @@ window.storageAuth = {
   },
 
   signOut: function () {
-    lsDel(snapKey());   // shared phone: don't leave this person's records behind
-    if (uid) lsDel(whoKey(uid));
-    return fbSignOut(auth).then(function () { switchUser(null); });
+    /* Give a just-made punch (e.g. the automatic clock-out when leaving the
+       site) up to 5 s to reach the server first. If offline it stays queued
+       for this person and is sent the next time they sign in. */
+    var t0 = Date.now();
+    var settle = new Promise(function (res) {
+      (function wait() {
+        if (!myQueue().length || !online || Date.now() - t0 > 5000) return res();
+        setTimeout(wait, 150);
+      })();
+    });
+    return settle.then(function () {
+      lsDel(snapKey());   // shared phone: don't leave this person's records behind
+      if (uid) lsDel(whoKey(uid));
+      return fbSignOut(auth);
+    }).then(function () { switchUser(null); });
   },
 
   /** Admin: create someone else's sign-in account. -> { uid, email, isDefault } */

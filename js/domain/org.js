@@ -116,6 +116,7 @@ export function saveSiteSettings(fields) {
   state.cfg.lockOutside = !!fields.lockOutside;
   state.cfg.graceMin = Math.max(0, g2);
   state.cfg.adminAnywhere = !!fields.adminAnywhere;
+  state.cfg.signOutOutside = !!fields.signOutOutside;
   state.cfg.demo = !!fields.demo;
   return Promise.all([saveCfg(), savePublic()]).then(function () { return "Settings saved."; });
 }

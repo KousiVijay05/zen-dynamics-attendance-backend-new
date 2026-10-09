@@ -22,7 +22,8 @@ export function vSignin() {
   if (locked && !state.adminOnly) {
     var d = distanceNow();
     return hero() +
-      '<div class="sign-card">' + proxBlock() + lockedBlock(d, false) + "</div>" +
+      '<div class="sign-card">' + proxBlock() + lockedBlock(d, false) +
+        (state.msg ? '<p class="msg">' + esc(state.msg) + "</p>" : "") + "</div>" +
       (state.cfg.adminAnywhere ? '<div style="text-align:center" class="sign-below"><button class="linkish" data-act="adminonly">Administrator sign-in</button></div>' : "");
   }
 

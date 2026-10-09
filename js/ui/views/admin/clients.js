@@ -4,7 +4,7 @@ import { state } from "../../../core/store.js";
 import { esc, shortDate } from "../../../utils/format.js";
 import { money } from "../../../domain/payroll.js";
 import { clientStatus, clientPhone, usedSessions, suggestedStart, today, monthReport, PAY_MODES, importable, clientLedger,
-         filterClients, planNames, lastVisits, DEFAULT_FILTER, packages, packageById, packageValidity, accountsToAdd, accountsMonths } from "../../../domain/clients.js";
+         filterClients, planNames, lastVisits, DEFAULT_FILTER, packages, packageById, packageValidity, accountsToAdd, accountsMonths, payMonthsLoaded } from "../../../domain/clients.js";
 
 function opt(v, label, cur) { return '<option value="' + esc(v) + '"' + (v === cur ? " selected" : "") + ">" + esc(label) + "</option>"; }
 
@@ -23,10 +23,15 @@ function filterBar(f) {
       '<label>Last visit<select id="clf_seen">' + opt("", "Any", f.seen) + opt("7", "Not seen in 7 days", f.seen) + opt("14", "Not seen in 14 days", f.seen) +
         opt("30", "Not seen in 30 days", f.seen) + opt("never", "Never marked", f.seen) + "</select></label>" +
       '<label>Plan<select id="clf_plan">' + opt("", "Any plan", f.plan) + plans.map(function (n) { return opt(n, n, f.plan); }).join("") + "</select></label>" +
+      '<label>Membership<select id="clf_length">' + opt("", "Any length", f.length) + opt("1", "Monthly", f.length) + opt("3", "3 months", f.length) +
+        opt("6", "6 months", f.length) + opt("12", "Yearly", f.length) + opt("pack", "Session packs", f.length) + "</select></label>" +
+      '<label>Paid<select id="clf_paid">' + opt("", "Any", f.paid) + opt("this", "Paid this month", f.paid) + opt("last", "Paid last month", f.paid) +
+        opt("notthis", "Not paid this month", f.paid) + opt("lastnotthis", "Paid last month, not this month", f.paid) + "</select></label>" +
       '<label>Balance<select id="clf_balance">' + opt("", "Any", f.balance) + opt("due", "Has balance due", f.balance) + "</select></label>" +
       '<label>Sort by<select id="clf_sort">' + opt("name", "Name", f.sort) + opt("end", "Ending soonest", f.sort) + opt("endlast", "Ended most recently", f.sort) +
         opt("seen", "Longest since last visit", f.sort) + opt("since", "Member since (oldest)", f.sort) + "</select></label>" +
     "</div>" +
+    (f.paid && !payMonthsLoaded() ? '<div class="loading">Loading payments…</div>' : "") +
     (active ? '<div style="text-align:right"><button class="linkish" data-act="clf-clear">Clear ' + active + " filter" + (active === 1 ? "" : "s") + "</button></div>" : "") +
   "</div>";
 }

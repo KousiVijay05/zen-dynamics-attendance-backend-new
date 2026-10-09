@@ -944,3 +944,12 @@ live 12, whatsapp 10, image 14, leavesite 14, unit 14 = 363).
 
 - The batch picker no longer repeats the time ("6–7 AM · 6:00 AM–7:00 AM"
   is now "6–7 AM"). Times are added only when a batch name has none.
+
+## 2026-10-10 — More client filters (v34)
+
+- **Membership:** Monthly, 3 months, 6 months, Yearly, Session packs.
+  Worked out from each plan's dates, so 6- and 12-month packages with
+  a bonus month still count as 6 and 12.
+- **Paid:** Paid this month, Paid last month, Not paid this month, Paid
+  last month but not this month. These two months of payments load when
+  the filter is first used.

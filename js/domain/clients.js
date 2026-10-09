@@ -329,7 +329,40 @@ export function sessionsOn(k) {
 
 /* ---------- finding clients ---------- */
 
-export var DEFAULT_FILTER = { status: "all", window: "", seen: "", plan: "", balance: "", sort: "name" };
+export var DEFAULT_FILTER = { status: "all", window: "", seen: "", plan: "", length: "", paid: "", balance: "", sort: "name" };
+
+/** "yyyy-mm" of this month and last month. */
+export function payMonths() {
+  var t = today(), y = +t.slice(0, 4), m = +t.slice(5, 7) - 1;
+  if (m < 1) { m = 12; y--; }
+  return { cur: t.slice(0, 7), prev: y + "-" + (m < 10 ? "0" : "") + m };
+}
+function payKeyOf(ym) { return "cl:pay:" + ym.replace("-", ""); }
+
+/** True once this month's and last month's payments are in memory. */
+export function payMonthsLoaded() {
+  var pm = payMonths(), have = state.clPays || {};
+  return !!have[payKeyOf(pm.cur)] && !!have[payKeyOf(pm.prev)];
+}
+
+/** Read this month's and last month's payments (for the "Paid" filter). */
+export function loadPayMonths() {
+  if (payMonthsLoaded()) return Promise.resolve();
+  var pm = payMonths();
+  return Promise.all([pm.cur, pm.prev].map(function (ym) {
+    var k = payKeyOf(ym);
+    return sget(k, true).then(function (v) { state.clPays[k] = Array.isArray(v) ? v : []; });
+  })).then(emitChange);
+}
+
+/** Membership length of a plan: "1", "3", "6", "12" (months), "pack", or "" if unknown. */
+export function planLength(p) {
+  if (!p) return "";
+  if (p.type === "pack") return "pack";
+  if (!p.start || !p.end) return "";
+  var days = (Date.parse(p.end) - Date.parse(p.start)) / DAY + 1;
+  return days <= 50 ? "1" : days <= 125 ? "3" : days <= 245 ? "6" : "12";   // 6M/12M packages carry a bonus month
+}
 
 function minusDays(n) { return dayKey(Date.now() - n * DAY); }
 
@@ -338,6 +371,13 @@ export function filterClients(f, q) {
   f = Object.assign({}, DEFAULT_FILTER, f || {});
   q = String(q || "").trim().toLowerCase();
   var t = today(), lv = lastVisits(), priv = state.clientPriv || {};
+  var paidIn = {};
+  if (f.paid) {
+    var pm = payMonths();
+    [pm.cur, pm.prev].forEach(function (ym) {
+      ((state.clPays || {})[payKeyOf(ym)] || []).forEach(function (x) { (paidIn[x.clientId] = paidIn[x.clientId] || {})[ym] = true; });
+    });
+  }
   var list = state.clients.filter(function (c) {
     var st = clientStatus(c), p = c.plan || {};
     if (f.status === "all" && st.kind === "off") return false;
@@ -353,6 +393,14 @@ export function filterClients(f, q) {
       if (f.seen === "never" ? !!last : (last && last >= minusDays(+f.seen))) return false;
     }
     if (f.plan && p.name !== f.plan) return false;
+    if (f.length && planLength(c.plan) !== f.length) return false;
+    if (f.paid) {
+      var pi = paidIn[c.id] || {}, cur = !!pi[pm.cur], prev = !!pi[pm.prev];
+      if (f.paid === "this" && !cur) return false;
+      if (f.paid === "last" && !prev) return false;
+      if (f.paid === "notthis" && cur) return false;
+      if (f.paid === "lastnotthis" && !(prev && !cur)) return false;
+    }
     if (f.balance === "due" && !/balance due/i.test((priv[c.id] || {}).notes || "")) return false;
     if (q && c.name.toLowerCase().indexOf(q) < 0 && ((priv[c.id] || {}).phone || "").indexOf(q) < 0) return false;
     return true;

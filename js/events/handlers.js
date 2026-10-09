@@ -33,7 +33,7 @@ import { exportExcel } from "../domain/excel.js";
 import { requestLeave, cancelLeave, decideLeave, allLeaves } from "../domain/leave.js";
 import {
   addClient, updateClient, renewClient, setClientActive, reminderText, waLinkTo, clientPhone,
-  startSession, discardSession, togglePick, submitSession, voidMark, markToday, canVoid, filterClients, exportFiltered, DEFAULT_FILTER,
+  startSession, discardSession, togglePick, submitSession, voidMark, markToday, canVoid, filterClients, exportFiltered, DEFAULT_FILTER, loadPayMonths,
   loadMonth, exportClientsExcel, today as clToday, downloadTemplate, readImportFile, importClients,
   loadAllPayments, exportFullHistory, importAccounts
 } from "../domain/clients.js";
@@ -71,8 +71,11 @@ export function initEvents() {
     if (ev.target.id === "ca_type") { state.clAddType = ev.target.value; emitChange(); }
     if (ev.target.id === "ca_pkg") { state.clAddPkg = ev.target.value; emitChange(); }
     if (ev.target.id === "cr_pkg") { state.clRenewPkg = ev.target.value; emitChange(); }
-    var fm = /^clf_(status|window|seen|plan|balance|sort)$/.exec(ev.target.id);
-    if (fm) { state.clFilter = Object.assign({}, state.clFilter); state.clFilter[fm[1]] = ev.target.value; emitChange(); }
+    var fm = /^clf_(status|window|seen|plan|length|paid|balance|sort)$/.exec(ev.target.id);
+    if (fm) {
+      state.clFilter = Object.assign({}, state.clFilter); state.clFilter[fm[1]] = ev.target.value; emitChange();
+      if (fm[1] === "paid" && ev.target.value) loadPayMonths().catch(function (e) { state.msg = e.message; state.msgOk = false; emitChange(); });
+    }
     if (ev.target.classList && ev.target.classList.contains("cl_incl_month") && state.clImport) {
       state.clImport.includeMonths = Object.assign({}, state.clImport.includeMonths);
       state.clImport.includeMonths[ev.target.getAttribute("data-sheet")] = ev.target.checked; emitChange();

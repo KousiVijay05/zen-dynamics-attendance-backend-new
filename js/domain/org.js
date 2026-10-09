@@ -70,6 +70,19 @@ export function deleteShift(id) {
   return Promise.all(writes).then(function () { return "Shift deleted."; });
 }
 
+/* ---------- client batches (time slots for client sessions) ---------- */
+export function addBatch(fields) {
+  var name = (fields.name || "").trim(), start = (fields.start || "").trim(), end = (fields.end || "").trim();
+  if (!name || !start) throw new Error("Enter the batch name and start time.");
+  if (!Array.isArray(state.cfg.batches)) state.cfg.batches = [];
+  state.cfg.batches.push({ id: uid(), name: name.slice(0, 40), start: start, end: end });
+  return saveCfg().then(function () { return "Batch added."; });
+}
+export function deleteBatch(id) {
+  state.cfg.batches = (state.cfg.batches || []).filter(function (b) { return b.id !== id; });
+  return saveCfg().then(function () { return "Batch removed (past sessions keep its name)."; });
+}
+
 export function startEditShift(id) { state.editShiftId = id; state.msg = ""; emitChange(); }
 export function cancelEditShift() { state.editShiftId = null; state.msg = ""; emitChange(); }
 

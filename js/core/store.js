@@ -26,7 +26,8 @@ export var state = {
   period: "week", month: ymKey(Date.now()), recPerson: "all",
   editId: null, editShiftId: null, adminOnly: false,
   /* clients module (domain/clients.js) */
-  clients: [], clientPriv: {}, clAtt: {}, clPays: {}, clOld: {}, clLoaded: false,
+  clients: [], clientPriv: {}, clAtt: {}, clSess: {}, clPays: {}, clOld: {}, clLoaded: false, session: null,
+  clFilter: { status: "all", window: "", seen: "", plan: "", balance: "", sort: "name" },
   clSub: "renew", clEdit: null, clSearch: "", clMonth: null, clAddType: "time", clRenewType: null, clBack: "staff", clImport: null, clImportBusy: false,
   /* attendance image being previewed before sharing: { url, file, caption, key } */
   waPreview: null, waBusy: false,

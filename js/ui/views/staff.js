@@ -227,7 +227,7 @@ export function vStaff() {
 
     '<button class="cl-launch" data-act="cl-open">' +
       '<span class="cl-ico">' + icons.clock + '</span>' +
-      '<span><b>Client attendance</b><br><span>Tick the clients who came today' + (state.clLoaded ? ' · ' + clientCount() : '') + '</span></span>' +
+      '<span><b>Client sessions</b><br><span>' + (state.session ? 'Session in progress: ' + esc(state.session.batchName) : 'Take attendance for a batch') + (state.clLoaded ? ' · ' + clientCount() : '') + '</span></span>' +
       '<span class="cl-go">›</span>' +
     '</button>' +
 

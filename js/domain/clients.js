@@ -8,10 +8,15 @@
      kv/cl:private         { id: { phone, notes, history: [plan] } }
                                      — admins only (phone numbers)
      kv/cl:pay:<yyyymm>    [payment] — admins only
-     clatt/<yyyymmdd>/<id> { by: staffId, at: ms }
-                                     — one tick per client per day; a coach
-                                       ticks in their own name and can only
-                                       untick their own; admins can do any
+     clsess/<yyyymmdd>/<sid> { batch, batchName, by, byName, start, at, clients }
+                                     — a submitted session; never changed
+     clatt/<yyyymmdd>/<id> { by, byName, at, sid, batch, batchName, void? }
+                                     — one mark per client per day, written
+                                       when a session is submitted. Marks are
+                                       never deleted: the coach who made one
+                                       can void it within 10 minutes, an admin
+                                       any time (with a reason); a voided mark
+                                       stays, shown as voided, and doesn't count
 
    client = { id, name, active, joined, plan }
    plan   = { type: "time",  name, start, end }            months-based
@@ -55,13 +60,18 @@ export function watchTicks() {
   if (unwatch && from === watchFrom) return;
   if (unwatch) unwatch();
   watchFrom = from;
-  unwatch = A().watch("clatt", from, function (v) { state.clAtt = v; emitChange(); });
+  var u1 = A().watch("clatt", from, function (v) { state.clAtt = v; emitChange(); });
+  var sessFrom = k8(dayKey(Date.now() - 62 * DAY));
+  var u2 = A().watch("clsess", sessFrom, function (v) { state.clSess = v; emitChange(); });
+  unwatch = function () { u1(); u2(); };
+  restoreSession();
 }
 
 export function stopClients() {
   if (unwatch) unwatch();
   unwatch = null; watchFrom = null;
-  state.clients = []; state.clientPriv = {}; state.clAtt = {}; state.clPays = {}; state.clOld = {}; state.clLoaded = false; state.clPaysAll = false;
+  state.clients = []; state.clientPriv = {}; state.clAtt = {}; state.clSess = {}; state.clPays = {}; state.clOld = {}; state.clLoaded = false; state.clPaysAll = false;
+  state.session = null;
 }
 
 /* ---------- plans + status ---------- */
@@ -102,7 +112,8 @@ export function usedSessions(c) {
   if (!c.plan) return 0;
   var s = k8(c.plan.start), e = c.plan.end ? k8(c.plan.end) : "99999999", n = c.plan.usedBefore || 0;
   Object.keys(state.clAtt || {}).forEach(function (d) {
-    if (d >= s && d <= e && state.clAtt[d] && state.clAtt[d][c.id]) n++;
+    var m = state.clAtt[d] && state.clAtt[d][c.id];
+    if (d >= s && d <= e && m && !m.void) n++;
   });
   return n;
 }
@@ -136,25 +147,176 @@ export function clientStatus(c) {
   return { kind: "active", label: "Till " + dateLabel(p.end), short: "Till " + dateLabel(p.end), daysLeft: daysLeft };
 }
 
-/* ---------- ticks (coaches and admins) ---------- */
+/* ---------- marks + sessions (coaches and admins) ---------- */
 
-export function tickedToday(id) { var d = (state.clAtt || {})[k8(today())]; return d ? d[id] || null : null; }
+var UNDO_MS = 10 * 60000;
 
-/** Tick / untick a client for today. Optimistic; the database confirms. */
-export function toggleTick(id) {
-  var day = k8(today()), cur = tickedToday(id);
-  if (cur && cur.by !== state.me.id && !state.me.admin) {
-    return Promise.reject(new Error("Another coach ticked this client — only they or an admin can untick it."));
-  }
-  var val = cur ? null : { by: state.me.id, at: Date.now() };
-  state.clAtt[day] = Object.assign({}, state.clAtt[day] || {});
-  if (val) state.clAtt[day][id] = val; else delete state.clAtt[day][id];
-  emitChange();
-  return A().setPath("clatt/" + day + "/" + id, val).catch(function (err) {
-    if (cur) state.clAtt[day][id] = cur; else delete state.clAtt[day][id];   // undo
-    emitChange();
+/** Today's mark for client `id` (including a voided one), or null. */
+export function markToday(id) { var d = (state.clAtt || {})[k8(today())]; return d ? d[id] || null : null; }
+/** Today's counted (not voided) mark, or null. */
+export function tickedToday(id) { var m = markToday(id); return m && !m.void ? m : null; }
+
+/** Day -> last visit ("yyyy-mm-dd") for every client, from watched marks. */
+export function lastVisits() {
+  var out = {};
+  Object.keys(state.clAtt || {}).sort().forEach(function (d) {
+    var day = state.clAtt[d] || {};
+    Object.keys(day).forEach(function (cid) { if (!day[cid].void) out[cid] = d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6, 8); });
+  });
+  return out;
+}
+
+/* Batches are admin-defined time slots (Admin → Shifts), kept in org:config. */
+export function batches() { return (state.cfg && Array.isArray(state.cfg.batches)) ? state.cfg.batches : []; }
+function batchById(id) { return batches().filter(function (b) { return b.id === id; })[0] || null; }
+/** The batch running now, or the next one today, or the last one. */
+export function suggestedBatch() {
+  var list = batches().slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
+  if (!list.length) return null;
+  var d = new Date(), now = (d.getHours() < 10 ? "0" : "") + d.getHours() + ":" + (d.getMinutes() < 10 ? "0" : "") + d.getMinutes();
+  var running = list.filter(function (b) { return b.start <= now && (!b.end || b.end >= now); })[0];
+  if (running) return running;
+  var next = list.filter(function (b) { return b.start > now; })[0];
+  return next || list[list.length - 1];
+}
+
+/* The session being taken on this phone survives a refresh (per person). */
+function sessKey() { return "zd-session:" + (state.me ? state.me.id : ""); }
+function persist() { try { if (state.session) localStorage.setItem(sessKey(), JSON.stringify(state.session)); else localStorage.removeItem(sessKey()); } catch (e) {} }
+function restoreSession() {
+  if (state.session || !state.me) return;
+  try {
+    var s = JSON.parse(localStorage.getItem(sessKey()) || "null");
+    if (s && s.day === today()) state.session = s; else localStorage.removeItem(sessKey());
+  } catch (e) {}
+}
+
+export function startSession(batchId) {
+  var b = batchById(batchId);
+  state.session = { sid: uid(), day: today(), batch: b ? b.id : "general", batchName: b ? b.name : "General session",
+                    start: Date.now(), picked: {} };
+  persist(); emitChange();
+}
+export function discardSession() { state.session = null; persist(); emitChange(); }
+
+/** Pick / unpick a client in the session being taken (nothing is saved until Submit). */
+export function togglePick(id) {
+  var s = state.session;
+  if (!s) return;
+  if (tickedToday(id)) throw new Error("Already marked today.");
+  if (s.picked[id]) delete s.picked[id]; else s.picked[id] = true;
+  persist(); emitChange();
+}
+
+/** Save the session and one mark per picked client, in one all-or-nothing write. */
+export function submitSession() {
+  var s = state.session;
+  if (!s) return Promise.reject(new Error("No session in progress."));
+  var ids = Object.keys(s.picked).filter(function (id) { return !tickedToday(id); });
+  if (!ids.length) return Promise.reject(new Error("Tick at least one client first."));
+  /* "at" is stamped by the server, not this phone, so a wrong phone clock
+     can't backdate (or forward-date) a mark — the rules require it. */
+  var day = k8(s.day), at = { ".sv": "timestamp" }, paths = {}, clients = {};
+  ids.forEach(function (id) {
+    var old = markToday(id);
+    var mark = { by: state.me.id, byName: state.me.name, at: at, sid: s.sid, batch: s.batch, batchName: s.batchName };
+    if (old && old.void) mark.prev = old;            // re-marking a voided mark keeps the old one inside
+    paths["clatt/" + day + "/" + id] = mark;
+    clients[id] = true;
+  });
+  paths["clsess/" + day + "/" + s.sid] = { batch: s.batch, batchName: s.batchName, by: state.me.id, byName: state.me.name,
+                                          start: s.start, at: at, clients: clients };
+  return A().update(paths).then(function () {
+    state.session = null; persist(); emitChange();
+    return s.batchName + ": " + ids.length + " client" + (ids.length === 1 ? "" : "s") + " marked.";
+  }, function (err) {
+    if (/^Not allowed/.test(err.message)) throw new Error("Someone else just marked one of these clients. The list has been refreshed — check and submit again.");
     throw err;
   });
+}
+
+/** Can the signed-in person void this mark now? */
+export function canVoid(m) {
+  if (!m || m.void || !state.me) return false;
+  if (state.me.admin) return true;
+  return m.by === state.me.id && Date.now() - m.at < UNDO_MS;
+}
+export function undoMinutesLeft(m) { return Math.max(0, Math.ceil((UNDO_MS - (Date.now() - m.at)) / 60000)); }
+
+/** Void (never delete) a mark: within 10 minutes by the coach who made it, any time by an admin. */
+export function voidMark(dayK, id, reason) {
+  var day = k8(dayK), m = (state.clAtt[day] || {})[id];
+  if (!canVoid(m)) return Promise.reject(new Error(state.me.admin ? "That mark is already voided." : "Marks can only be undone by the coach who made them, within 10 minutes. Ask an admin."));
+  var v = Object.assign({}, m, { void: { by: state.me.id, byName: state.me.name, at: Date.now(), reason: String(reason || "").trim().slice(0, 200) || "Marked by mistake" } });
+  return A().setPath("clatt/" + day + "/" + id, v).then(function () { return "Mark voided — it stays in the records as voided."; });
+}
+
+/** Sessions on day k ("yyyy-mm-dd"), newest first. */
+export function sessionsOn(k) {
+  var d = (state.clSess || {})[k8(k)] || {};
+  return Object.keys(d).map(function (sid) { return Object.assign({ sid: sid }, d[sid]); }).sort(function (a, b) { return b.at - a.at; });
+}
+
+/* ---------- finding clients ---------- */
+
+export var DEFAULT_FILTER = { status: "all", window: "", seen: "", plan: "", balance: "", sort: "name" };
+
+function minusDays(n) { return dayKey(Date.now() - n * DAY); }
+
+/** Clients matching `f` (see DEFAULT_FILTER) and search text `q`, sorted. */
+export function filterClients(f, q) {
+  f = Object.assign({}, DEFAULT_FILTER, f || {});
+  q = String(q || "").trim().toLowerCase();
+  var t = today(), lv = lastVisits(), priv = state.clientPriv || {};
+  var list = state.clients.filter(function (c) {
+    var st = clientStatus(c), p = c.plan || {};
+    if (f.status === "all" && st.kind === "off") return false;
+    if (f.status !== "all" && f.status !== st.kind) return false;
+    if (f.window) {
+      var w = f.window.split(":"), n = +w[1];
+      if (w[0] === "ends" && !(p.end && p.end >= t && p.end <= dayKey(Date.now() + n * DAY))) return false;
+      if (w[0] === "expired" && !(st.kind === "expired" && p.end && p.end >= minusDays(n))) return false;
+      if (w[0] === "expiredbefore" && !(st.kind === "expired" && (!p.end || p.end < minusDays(n)))) return false;
+    }
+    if (f.seen) {
+      var last = lv[c.id];
+      if (f.seen === "never" ? !!last : (last && last >= minusDays(+f.seen))) return false;
+    }
+    if (f.plan && p.name !== f.plan) return false;
+    if (f.balance === "due" && !/balance due/i.test((priv[c.id] || {}).notes || "")) return false;
+    if (q && c.name.toLowerCase().indexOf(q) < 0 && ((priv[c.id] || {}).phone || "").indexOf(q) < 0) return false;
+    return true;
+  });
+  var by = {
+    name: function (a, b) { return a.name.localeCompare(b.name); },
+    end: function (a, b) { return ((a.plan || {}).end || "9999") < ((b.plan || {}).end || "9999") ? -1 : 1; },
+    endlast: function (a, b) { return ((a.plan || {}).end || "0000") > ((b.plan || {}).end || "0000") ? -1 : 1; },
+    seen: function (a, b) { return (lv[a.id] || "0000") < (lv[b.id] || "0000") ? -1 : 1; },
+    since: function (a, b) { return (a.joined || "") < (b.joined || "") ? -1 : 1; }
+  };
+  return list.sort(by[f.sort] || by.name);
+}
+
+/** Distinct plan names (for the filter). */
+export function planNames() {
+  var m = {};
+  state.clients.forEach(function (c) { if (c.plan && c.plan.name) m[c.plan.name] = (m[c.plan.name] || 0) + 1; });
+  return Object.keys(m).sort();
+}
+
+/** Excel of the filtered list. */
+export function exportFiltered(list) {
+  if (typeof XLSX === "undefined") throw new Error("Excel library didn't load. Check the connection and reload.");
+  var lv = lastVisits(), priv = state.clientPriv || {};
+  var rows = [["Client", "Phone", "Status", "Plan", "Start", "End", "Last visit", "Member since", "Notes"]];
+  list.forEach(function (c) {
+    var p = c.plan || {};
+    rows.push([c.name, (priv[c.id] || {}).phone || "", clientStatus(c).label, p.name || "", p.start || "", p.end || "", lv[c.id] || "", c.joined || "", (priv[c.id] || {}).notes || ""]);
+  });
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "Clients");
+  XLSX.writeFile(wb, "clients-filtered-" + today() + ".xlsx");
+  return list.length + " clients exported.";
 }
 
 /* ---------- admin: add / edit / renew ---------- */
@@ -292,20 +454,29 @@ export function loadMonth(ym) {
 export function monthReport(ym) {
   var from = ym.replace("-", "") + "01", to = ym.replace("-", "") + "31";
   var src = (watchFrom && from >= watchFrom) ? state.clAtt : (state.clOld[ym] || {});
-  var visits = {}, days = 0, total = 0, byCoach = {};
+  var visits = {}, days = 0, total = 0, byCoach = {}, byBatch = {}, voided = 0;
   Object.keys(src || {}).forEach(function (d) {
     if (d < from || d > to) return;
     var n = 0;
     Object.keys(src[d] || {}).forEach(function (cid) {
+      var mk = src[d][cid];
+      if (mk.void) { voided++; return; }
       visits[cid] = (visits[cid] || 0) + 1; n++; total++;
-      var by = src[d][cid].by; byCoach[by] = (byCoach[by] || 0) + 1;
+      byCoach[mk.byName || mk.by] = (byCoach[mk.byName || mk.by] || 0) + 1;
+      var bn = mk.batchName || "Before batches"; byBatch[bn] = (byBatch[bn] || 0) + 1;
     });
     if (n) days++;
   });
   var pays = (state.clPays["cl:pay:" + ym.replace("-", "")] || []).slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; });
   var byMode = {}, revenue = 0;
   pays.forEach(function (p) { revenue += p.amount; byMode[p.mode] = (byMode[p.mode] || 0) + p.amount; });
-  return { visits: visits, totalVisits: total, daysWithVisits: days, byCoach: byCoach, payments: pays, revenue: revenue, byMode: byMode };
+  var sessions = 0, sessByCoach = {};
+  Object.keys(state.clSess || {}).forEach(function (d) {
+    if (d < from || d > to) return;
+    Object.keys(state.clSess[d]).forEach(function (sid) { var x = state.clSess[d][sid]; sessions++; sessByCoach[x.byName || x.by] = (sessByCoach[x.byName || x.by] || 0) + 1; });
+  });
+  return { visits: visits, totalVisits: total, daysWithVisits: days, byCoach: byCoach, byBatch: byBatch, voided: voided,
+           sessions: sessions, sessByCoach: sessByCoach, payments: pays, revenue: revenue, byMode: byMode };
 }
 
 /** Excel: clients, the month's visits (one row per tick) and payments. */
@@ -320,13 +491,14 @@ export function exportClientsExcel(ym) {
     clients.push([c.name, clientPhone(c.id), p.name || "", p.type === "pack" ? "Session pack" : p.type ? "Time" : "",
       p.start || "", p.end || "", p.sessions || "", p.type === "pack" ? usedSessions(c) : "", st.label, r.visits[c.id] || 0]);
   });
-  var visits = [["Date", "Client", "Ticked by", "Time"]];
+  var visits = [["Date", "Client", "Batch", "Marked by", "Time", "Voided", "Void reason"]];
   var src = (watchFrom && (ym.replace("-", "") + "01") >= watchFrom) ? state.clAtt : (state.clOld[ym] || {});
   Object.keys(src).sort().forEach(function (d) {
     if (d.slice(0, 6) !== ym.replace("-", "")) return;
     Object.keys(src[d]).forEach(function (cid) {
       var t = src[d][cid];
-      visits.push([d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6), name(cid), coach(t.by), new Date(t.at).toLocaleTimeString()]);
+      visits.push([d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6), name(cid), t.batchName || "", t.byName || coach(t.by),
+        new Date(t.at).toLocaleTimeString(), t.void ? "Voided by " + (t.void.byName || "") : "", t.void ? t.void.reason : ""]);
     });
   });
   var pays = [["Date", "Client", "Plan", "From", "To", "Amount", "Mode", "Recorded by"]];

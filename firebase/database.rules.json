@@ -65,13 +65,82 @@
       "$day": {
         ".validate": "$day.matches(/^20[0-9]{6}$/)",
         "$cid": {
-          ".write": "(auth != null && root.child('uidmap/' + auth.uid).isString() && root.child('admins/' + root.child('uidmap/' + auth.uid).val()).val() === true) || ((auth != null && root.child('uidmap/' + auth.uid).isString()) && ((!data.exists() && newData.child('by').val() === root.child('uidmap/' + auth.uid).val()) || (!newData.exists() && data.child('by').val() === root.child('uidmap/' + auth.uid).val())))",
-          ".validate": "$cid.matches(/^[A-Za-z0-9_-]{1,64}$/) && newData.hasChildren(['by', 'at']) && newData.child('by').isString() && newData.child('at').isNumber() && newData.child('at').val() <= now + 300000",
+          ".write": "newData.exists() && (auth != null && root.child('uidmap/' + auth.uid).isString()) && (((!data.exists() || data.child('void').exists()) && newData.child('by').val() === root.child('uidmap/' + auth.uid).val() && !newData.child('void').exists() && newData.child('at').val() >= now - 60000) || (data.exists() && !data.child('void').exists() && newData.child('void').exists() && newData.child('void/by').val() === root.child('uidmap/' + auth.uid).val() && newData.child('by').val() === data.child('by').val() && newData.child('at').val() === data.child('at').val() && newData.child('sid').val() === data.child('sid').val() && newData.child('batch').val() === data.child('batch').val() && ((auth != null && root.child('uidmap/' + auth.uid).isString() && root.child('admins/' + root.child('uidmap/' + auth.uid).val()).val() === true) || (data.child('by').val() === root.child('uidmap/' + auth.uid).val() && data.child('at').val() > now - 600000))))",
+          ".validate": "$cid.matches(/^[A-Za-z0-9_-]{1,64}$/) && newData.hasChildren(['by', 'at']) && newData.child('at').isNumber() && newData.child('at').val() <= now + 300000",
           "by": {
-            ".validate": true
+            ".validate": "newData.isString() && newData.val().length <= 100"
+          },
+          "byName": {
+            ".validate": "newData.isString() && newData.val().length <= 100"
+          },
+          "sid": {
+            ".validate": "newData.isString() && newData.val().length <= 100"
+          },
+          "batch": {
+            ".validate": "newData.isString() && newData.val().length <= 100"
+          },
+          "batchName": {
+            ".validate": "newData.isString() && newData.val().length <= 100"
           },
           "at": {
             ".validate": true
+          },
+          "void": {
+            ".validate": "newData.hasChildren(['by', 'at', 'reason']) && newData.child('at').isNumber() && newData.child('reason').isString() && newData.child('reason').val().length <= 200",
+            "by": {
+              ".validate": "newData.isString() && newData.val().length <= 100"
+            },
+            "byName": {
+              ".validate": "newData.isString() && newData.val().length <= 100"
+            },
+            "at": {
+              ".validate": true
+            },
+            "reason": {
+              ".validate": true
+            },
+            "$x": {
+              ".validate": false
+            }
+          },
+          "prev": {
+            ".validate": true
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      }
+    },
+    "clsess": {
+      ".read": "(auth != null && root.child('uidmap/' + auth.uid).isString())",
+      "$day": {
+        ".validate": "$day.matches(/^20[0-9]{6}$/)",
+        "$sid": {
+          ".write": "!data.exists() && newData.exists() && (auth != null && root.child('uidmap/' + auth.uid).isString()) && newData.child('by').val() === root.child('uidmap/' + auth.uid).val()",
+          ".validate": "$sid.matches(/^[A-Za-z0-9_-]{1,64}$/) && newData.hasChildren(['by', 'at', 'batch', 'clients']) && newData.child('at').isNumber() && newData.child('at').val() <= now + 300000 && newData.child('at').val() >= now - 60000",
+          "by": {
+            ".validate": "newData.isString() && newData.val().length <= 100"
+          },
+          "byName": {
+            ".validate": "newData.isString() && newData.val().length <= 100"
+          },
+          "batch": {
+            ".validate": "newData.isString() && newData.val().length <= 100"
+          },
+          "batchName": {
+            ".validate": "newData.isString() && newData.val().length <= 100"
+          },
+          "at": {
+            ".validate": true
+          },
+          "start": {
+            ".validate": "newData.isNumber()"
+          },
+          "clients": {
+            "$cid": {
+              ".validate": "newData.val() === true"
+            }
           },
           "$other": {
             ".validate": false

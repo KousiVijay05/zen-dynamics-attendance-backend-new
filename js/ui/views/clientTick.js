@@ -1,9 +1,12 @@
-/* Client attendance (coaches and admins): search, then one tap per client
-   to tick them in for today. Shows each client's plan status. No phone
-   numbers or payments here — coaches can't read those at all. */
+/* Client sessions (coaches and admins).
+   Start a session for a batch → tick who's present → Submit. Marks are
+   saved only on Submit and can't be deleted: the coach who made a mark
+   can undo it (void it) within 10 minutes; after that only an admin can
+   void it, with a reason. Voided marks stay visible. No phone numbers or
+   payments here — coaches can't read those at all. */
 import { state } from "../../core/store.js";
-import { esc, tClock } from "../../utils/format.js";
-import { clientStatus, tickedToday } from "../../domain/clients.js";
+import { esc, tClock, hm12 } from "../../utils/format.js";
+import { clientStatus, tickedToday, markToday, batches, suggestedBatch, sessionsOn, canVoid, undoMinutesLeft, today } from "../../domain/clients.js";
 import { brandMark } from "../components/brand.js";
 import { icons, avatar } from "../components/icons.js";
 import { distanceNow } from "../../domain/geofence.js";
@@ -12,14 +15,91 @@ import { proxBlock, lockedBlock } from "../components/proximity.js";
 
 var CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
-function coachName(id) {
+function who(id, name) {
   if (state.me && id === state.me.id) return "you";
+  if (name) return name.split(" ")[0];
   var p = state.roster.filter(function (x) { return x.id === id; })[0];
   return p ? p.name.split(" ")[0] : "a coach";
 }
+function pill(st) {
+  return '<span class="tag ' + (st.kind === "expired" ? "" : st.kind === "soon" || st.kind === "future" || st.kind === "none" ? "pending" : "on") + '">' + esc(st.short) + "</span>";
+}
+
+/* Taking a session: search, tick, submit. */
+function taking() {
+  var s = state.session;
+  var q = (state.clSearch || "").trim().toLowerCase();
+  var list = state.clients.filter(function (c) { return c.active !== false; }).sort(function (a, b) { return a.name.localeCompare(b.name); });
+  var shown = q ? list.filter(function (c) { return c.name.toLowerCase().indexOf(q) >= 0; }) : list;
+  var picked = Object.keys(s.picked).filter(function (id) { return !tickedToday(id); }).length;
+
+  var html = '<div class="hero-stat"><span class="k">' + esc(s.batchName) + " · started " + tClock(s.start) + '</span>' +
+      '<span class="v">' + picked + "<small> ticked</small></span>" +
+      '<div class="meter"><i style="width:' + (list.length ? Math.round(picked / list.length * 100) : 0) + '%"></i></div></div>' +
+    '<div class="field"><input id="cl_search" type="search" autocomplete="off" placeholder="Search clients…" value="' + esc(state.clSearch || "") + '" /></div>';
+
+  if (!list.length) return html + '<div class="rows" style="margin-top:12px"><div class="empty">No clients yet. An admin adds them in Admin → Clients.</div></div>';
+  html += '<div class="rows" style="margin-top:12px">' + (shown.length ? shown.map(function (c) {
+    var st = clientStatus(c), done = tickedToday(c.id), on = !!s.picked[c.id] && !done;
+    var meta = done ? "Already in · " + esc(done.batchName || "") + " · by " + esc(who(done.by, done.byName)) : esc(st.label);
+    return '<div class="row cl-row' + (on ? " is-in" : "") + (done ? " is-done" : "") + '">' +
+      '<span class="person-cell">' + avatar(c.name, on || done ? "in" : "") +
+        '<span><span class="who">' + esc(c.name) + "</span>" + pill(st) + '<br><span class="meta">' + meta + "</span></span></span>" +
+      (done ? '<span class="tick done" aria-hidden="true">' + CHECK + "</span>"
+            : '<button class="tick' + (on ? " on" : "") + '" data-act="cl-pick" data-id="' + esc(c.id) + '" aria-pressed="' + on + '" aria-label="' + (on ? "Untick " : "Tick ") + esc(c.name) + '">' + CHECK + "</button>") +
+    "</div>";
+  }).join("") : '<div class="empty">No client matches “' + esc(q) + "”.</div>") + "</div>";
+
+  html += '<div class="submit-bar"><button class="btn go" data-act="cl-submit"' + (picked ? "" : " disabled") + ">Submit · " + picked + " client" + (picked === 1 ? "" : "s") + "</button>" +
+    '<button class="btn quiet" data-act="cl-discard">Discard</button></div>';
+  html += '<p class="msg' + (state.msgOk ? " ok" : "") + '">' + esc(state.msg) + "</p>";
+  html += '<p class="note">Nothing is saved until you tap Submit. After submitting, you can undo a mark for 10 minutes; after that only an admin can void it.</p>';
+  return html;
+}
+
+/* Not in a session: start one, and see today's sessions. */
+function overview() {
+  var bs = batches().slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
+  var sug = suggestedBatch();
+  var html = '<div class="card"><h3>Start a session</h3>' +
+    '<div class="field"><label for="cl_batch">Batch</label><select id="cl_batch">' +
+      bs.map(function (b) { return '<option value="' + esc(b.id) + '"' + (sug && sug.id === b.id ? " selected" : "") + ">" + esc(b.name) + " · " + esc(hm12(b.start)) + (b.end ? "–" + esc(hm12(b.end)) : "") + "</option>"; }).join("") +
+      '<option value="general"' + (bs.length ? "" : " selected") + ">General session (no batch)</option></select></div>" +
+    (bs.length ? "" : '<p class="note">No batches yet — an admin can add them in Admin → Shifts.</p>') +
+    '<div class="btnrow"><button class="btn go wide" data-act="cl-start">' + icons.login + "Start session</button></div></div>";
+
+  var sess = sessionsOn(today());
+  var marksToday = state.clients.filter(function (c) { return tickedToday(c.id); }).length;
+  html += "<h2>Today · " + marksToday + " client" + (marksToday === 1 ? "" : "s") + " in · " + sess.length + " session" + (sess.length === 1 ? "" : "s") + "</h2>";
+  if (!sess.length) return html + '<div class="rows"><div class="empty">No sessions submitted today yet.</div></div>' + msg();
+  html += sess.map(function (x) {
+    var ids = Object.keys(x.clients || {});
+    var rows = ids.map(function (cid) {
+      var c = state.clients.filter(function (y) { return y.id === cid; })[0];
+      var m = markToday(cid), mine = m && m.sid === x.sid;
+      var line, act = "";
+      if (!mine) line = '<span class="meta">Marked in another session</span>';
+      else if (m.void) line = '<span class="meta void-line">Voided by ' + esc(who(m.void.by, m.void.byName)) + " · " + tClock(m.void.at) + " · " + esc(m.void.reason) + "</span>";
+      else {
+        line = '<span class="meta">In at ' + tClock(m.at) + "</span>";
+        if (canVoid(m)) act = '<button class="btn quiet small" data-act="cl-void" data-id="' + esc(cid) + '">' +
+          (state.me.admin && !(m.by === state.me.id && undoMinutesLeft(m) > 0) ? "Void" : "Undo · " + undoMinutesLeft(m) + " min") + "</button>";
+      }
+      return '<div class="row"><span class="person-cell">' + avatar(c ? c.name : "?", m && !m.void && mine ? "in" : "dim") +
+        '<span><span class="who' + (m && m.void && mine ? " struck" : "") + '">' + esc(c ? c.name : "(removed client)") + "</span><br>" + line + "</span></span>" +
+        (act ? "<span>" + act + "</span>" : "") + "</div>";
+    }).join("");
+    return '<details class="sess"' + (x.by === (state.me && state.me.id) ? " open" : "") + '><summary><span><span class="who">' + esc(x.batchName || "Session") + "</span>" +
+      '<br><span class="meta">' + esc(who(x.by, x.byName)) + " · " + tClock(x.at) + "</span></span>" +
+      '<span class="dur">' + ids.length + "</span></summary>" + '<div class="rows">' + rows + "</div></details>";
+  }).join("");
+  return html + msg();
+}
+
+function msg() { return '<p class="msg' + (state.msgOk ? " ok" : "") + '">' + esc(state.msg) + "</p>"; }
 
 export function vClientTick() {
-  var head = '<div class="bar"><div class="idn">' + brandMark() + '<div><div class="nm">Client attendance</div>' +
+  var head = '<div class="bar"><div class="idn">' + brandMark() + '<div><div class="nm">Client sessions</div>' +
     '<div class="sub">' + new Date().toLocaleDateString([], { weekday: "long", day: "numeric", month: "short" }) + "</div></div></div>" +
     '<div class="acts"><button class="btn quiet small" data-act="cl-back">' + icons.back + "Back</button></div></div>";
 
@@ -28,34 +108,5 @@ export function vClientTick() {
   var locked = state.cfg.lockOutside && !(d !== null && d <= s.radius) && !(state.me.admin && state.cfg.adminAnywhere);
   if (locked) return head + proxBlock() + lockedBlock(d, false) + '<p class="why warn">Client attendance can only be marked at the gym.</p>';
   if (!state.clLoaded) return head + '<div class="loading">Loading clients…</div>';
-
-  var q = (state.clSearch || "").trim().toLowerCase();
-  var list = state.clients.filter(function (c) { return c.active !== false; })
-    .sort(function (a, b) { return a.name.localeCompare(b.name); });
-  var ticked = list.filter(function (c) { return tickedToday(c.id); }).length;
-  var shown = q ? list.filter(function (c) { return c.name.toLowerCase().indexOf(q) >= 0; }) : list;
-
-  var html = head +
-    '<div class="hero-stat"><span class="k">Checked in today</span>' +
-      '<span class="v">' + ticked + "<small> / " + list.length + " clients</small></span>" +
-      '<div class="meter"><i style="width:' + (list.length ? Math.round(ticked / list.length * 100) : 0) + '%"></i></div></div>' +
-    '<div class="field"><input id="cl_search" type="search" autocomplete="off" placeholder="Search clients…" value="' + esc(state.clSearch || "") + '" /></div>';
-
-  if (!list.length) return html + '<div class="rows" style="margin-top:12px"><div class="empty">No clients yet. An admin adds them in Admin → Clients.</div></div>';
-  if (!shown.length) return html + '<div class="rows" style="margin-top:12px"><div class="empty">No client matches “' + esc(q) + "”.</div></div>";
-
-  html += '<div class="rows" style="margin-top:12px">' + shown.map(function (c) {
-    var st = clientStatus(c), t = tickedToday(c.id);
-    var pill = '<span class="tag ' + (st.kind === "expired" ? "" : st.kind === "soon" ? "pending" : "on") + '">' + esc(st.short) + "</span>";
-    return '<div class="row cl-row' + (t ? " is-in" : "") + '">' +
-      '<span class="person-cell">' + avatar(c.name, t ? "in" : "") +
-        '<span><span class="who">' + esc(c.name) + "</span>" + pill +
-        '<br><span class="meta">' + (t ? "In at " + tClock(t.at) + " · by " + esc(coachName(t.by)) : esc(st.label)) + "</span></span></span>" +
-      '<button class="tick' + (t ? " on" : "") + '" data-act="cl-tick" data-id="' + esc(c.id) + '" aria-pressed="' + (t ? "true" : "false") +
-        '" aria-label="' + (t ? "Untick " : "Tick ") + esc(c.name) + '">' + CHECK + "</button>" +
-    "</div>";
-  }).join("") + "</div>";
-  html += '<p class="msg' + (state.msgOk ? " ok" : "") + '">' + esc(state.msg) + "</p>";
-  html += '<p class="note">Tap ✓ when a client arrives. Tap again to undo a mistake (only your own ticks). Expired or nearly-expired clients are flagged — tell the admin.</p>';
-  return html;
+  return head + (state.session && state.session.day === today() ? taking() : overview());
 }

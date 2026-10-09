@@ -26,13 +26,14 @@ import {
 import { clockIn, clockOut, loadAdminData, openEntryFor } from "../domain/attendance.js";
 import { addStaff, updateStaff, toggleActive, startEdit, cancelEdit } from "../domain/roster.js";
 import {
-  toggleWeeklyOff, savePayRules, saveSiteSettings,
+  toggleWeeklyOff, savePayRules, saveSiteSettings, addBatch, deleteBatch,
   addShift, updateShift, deleteShift, startEditShift, cancelEditShift
 } from "../domain/org.js";
 import { exportExcel } from "../domain/excel.js";
 import { requestLeave, cancelLeave, decideLeave, allLeaves } from "../domain/leave.js";
 import {
-  toggleTick, addClient, updateClient, renewClient, setClientActive, reminderText, waLinkTo, clientPhone,
+  addClient, updateClient, renewClient, setClientActive, reminderText, waLinkTo, clientPhone,
+  startSession, discardSession, togglePick, submitSession, voidMark, markToday, canVoid, filterClients, exportFiltered, DEFAULT_FILTER,
   loadMonth, exportClientsExcel, today as clToday, downloadTemplate, readImportFile, importClients,
   loadAllPayments, exportFullHistory
 } from "../domain/clients.js";
@@ -68,6 +69,8 @@ export function initEvents() {
   root.addEventListener("change", function (ev) {
     if (ev.target.id === "cl_month") { state.clMonth = ev.target.value; emitChange(); loadMonth(state.clMonth); }
     if (ev.target.id === "ca_type") { state.clAddType = ev.target.value; emitChange(); }
+    var fm = /^clf_(status|window|seen|plan|balance|sort)$/.exec(ev.target.id);
+    if (fm) { state.clFilter = Object.assign({}, state.clFilter); state.clFilter[fm[1]] = ev.target.value; emitChange(); }
     if (ev.target.id === "cl_incl_ended" && state.clImport) { state.clImport.includeEnded = ev.target.checked; emitChange(); }
     if (ev.target.id === "cl_file" && ev.target.files && ev.target.files[0]) {
       var file = ev.target.files[0];
@@ -349,8 +352,40 @@ tasks: selectedTasks
     /* ---------- clients ---------- */
     if (act === "cl-open") { state.clBack = state.view; state.view = "clients"; state.msg = ""; emitChange(); return; }
     if (act === "cl-back") { state.view = state.clBack === "admin" ? "admin" : "staff"; state.msg = ""; state.clSearch = ""; emitChange(); return; }
-    if (act === "cl-tick") {
-      toggleTick(id).then(function () { state.msg = ""; }).catch(function (err) { say(err.message); });
+    if (act === "cl-start") { state.msg = ""; state.clSearch = ""; startSession($("cl_batch") ? $("cl_batch").value : "general"); window.scrollTo(0, 0); return; }
+    if (act === "cl-pick") { try { togglePick(id); } catch (err) { say(err.message); } return; }
+    if (act === "cl-discard") {
+      var np = state.session ? Object.keys(state.session.picked).length : 0;
+      if (np && !wConfirm("Discard this session? The " + np + " tick" + (np === 1 ? "" : "s") + " haven't been saved.")) return;
+      discardSession(); state.msg = ""; return;
+    }
+    if (act === "cl-submit") {
+      var btn = t; btn.disabled = true;
+      submitSession().then(function (msg) { state.clSearch = ""; sayAndPaint(msg, true); }).catch(function (err) { btn.disabled = false; say(err.message); });
+      return;
+    }
+    if (act === "cl-void") {
+      var mk = markToday(id);
+      if (!canVoid(mk)) { say("This mark can't be changed now — ask an admin."); return; }
+      var own = mk.by === state.me.id && Date.now() - mk.at < 600000;
+      var reason = own && !state.me.admin ? "Undone by coach (marked by mistake)" : window.prompt("Reason for voiding this mark?", "Marked by mistake");
+      if (reason === null) return;
+      voidMark(clToday(), id, reason || "Marked by mistake")
+        .then(function (msg) { sayAndPaint(msg, true); }).catch(function (err) { say(err.message); });
+      return;
+    }
+    if (act === "clf-clear") { state.clFilter = Object.assign({}, DEFAULT_FILTER); state.clSearch = ""; emitChange(); return; }
+    if (act === "clf-export") { try { say(exportFiltered(filterClients(state.clFilter, state.clSearch)), true); } catch (err) { say(err.message); } return; }
+    if (act === "addbatch") {
+      try {
+        addBatch({ name: $("b_name").value, start: $("b_start").value, end: $("b_end").value })
+          .then(function (msg) { clearFields(["b_name", "b_start", "b_end"]); sayAndPaint(msg, true); }).catch(function (err) { say(err.message); });
+      } catch (err) { say(err.message); }
+      return;
+    }
+    if (act === "delbatch") {
+      if (!wConfirm("Remove this batch? Past sessions keep its name.")) return;
+      deleteBatch(id).then(function (msg) { sayAndPaint(msg, true); }).catch(function (err) { say(err.message); });
       return;
     }
     if (act === "cl-sub") {

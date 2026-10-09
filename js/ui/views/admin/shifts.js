@@ -72,5 +72,18 @@ export function tabShifts() {
 
   html += "</div>";
 
+  var bs = (Array.isArray(state.cfg.batches) ? state.cfg.batches : []).slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
+  html += "<h2>Client batches</h2>" +
+    '<p class="note" style="margin-top:0">Time slots coaches pick when they take a client session (e.g. 6 AM, 7 AM, 6 PM).</p>' +
+    '<div class="rows">' + (bs.length ? bs.map(function (b) {
+      return '<div class="row"><span><span class="who">' + esc(b.name) + '</span><br><span class="meta">' + esc(hm12(b.start)) + (b.end ? " – " + esc(hm12(b.end)) : "") + "</span></span>" +
+        '<span><button class="btn quiet small" data-act="delbatch" data-id="' + esc(b.id) + '">Remove</button></span></div>';
+    }).join("") : '<div class="empty">No batches yet.</div>') + "</div>" +
+    '<div class="card"><h3>Add a batch</h3>' +
+      '<div class="field"><label for="b_name">Batch name</label><input id="b_name" type="text" placeholder="e.g. 6 AM batch" /></div>' +
+      '<div class="field pair"><div><label for="b_start">Starts</label><input id="b_start" type="time" /></div>' +
+      '<div><label for="b_end">Ends</label><input id="b_end" type="time" /></div></div>' +
+      '<div class="btnrow"><button class="btn go wide" data-act="addbatch">Add batch</button></div></div>';
+
   return html;
 }

@@ -861,3 +861,35 @@ Regression: import (25), clients (46).
 Verified with the owner's real export on the LOCAL emulator (wiped after):
 all 175 clients' totals match the file; Excel has 175 clients, 305
 memberships, 296 payments. clients.test.js now 49 checks.
+
+## 2026-10-10 — Batch sessions, permanent marks, client filters (v30)
+
+**Batches** (Admin → Shifts → Client batches): time slots such as 6 AM / 7 AM
+/ 6 PM, kept in org:config. Clients aren't assigned to a batch.
+
+**Sessions** (coaches and admins): Start session → the batch running now is
+pre-selected → search + tick → Submit. Nothing is saved until Submit; then
+the session (`clsess/<day>/<sid>`) and one mark per client
+(`clatt/<day>/<client>`) are written in one all-or-nothing update. A session
+in progress survives a reload; Discard asks first. A client already marked
+today shows "Already in · batch · by coach" and can't be marked twice.
+
+**Marks can't be removed** (enforced by database rules): no deletes by
+anyone; a submitted session can't be changed; the coach who made a mark can
+undo it within 10 minutes and an admin can void it any time with a reason —
+both add a `void` record and the mark stays, shown struck through. Re-marking
+a voided client keeps the voided mark inside (`prev`). Mark/session times
+are stamped by the server, so a phone's clock can't backdate them.
+
+**Finding clients** (Admin → Clients → Clients): status, plan dates (ends
+within 7/15/30 days, expired in last 30/90 days or earlier), last visit (not
+seen in 7/14/30 days, never), plan, balance due; sort by name / ending
+soonest / ended most recently / longest since last visit / member since;
+search by name or phone; live "X of Y" count; Excel of the filtered list.
+
+**Reports**: visits per batch, sessions taken per coach, voided marks
+(excluded from counts, listed in the Excel with reason).
+
+Tests: sessions.test.js (30), clients.test.js now 61 (incl. delete / late
+void / backdate / session rewrite attempts against the rules); all suites
+re-run: 326 checks.

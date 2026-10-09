@@ -3,7 +3,33 @@
 import { state } from "../../../core/store.js";
 import { esc, shortDate } from "../../../utils/format.js";
 import { money } from "../../../domain/payroll.js";
-import { clientStatus, clientPhone, usedSessions, suggestedStart, today, monthReport, PAY_MODES, importable, clientLedger } from "../../../domain/clients.js";
+import { clientStatus, clientPhone, usedSessions, suggestedStart, today, monthReport, PAY_MODES, importable, clientLedger,
+         filterClients, planNames, lastVisits, DEFAULT_FILTER } from "../../../domain/clients.js";
+
+function opt(v, label, cur) { return '<option value="' + esc(v) + '"' + (v === cur ? " selected" : "") + ">" + esc(label) + "</option>"; }
+
+/* The filter panel for the Clients list. Every change re-filters at once. */
+function filterBar(f) {
+  var plans = planNames();
+  var active = Object.keys(DEFAULT_FILTER).filter(function (k) { return k !== "sort" && f[k] !== DEFAULT_FILTER[k]; }).length;
+  return '<div class="filters">' +
+    '<div class="field"><input id="cl_search" type="search" autocomplete="off" placeholder="Search name or phone…" value="' + esc(state.clSearch || "") + '" /></div>' +
+    '<div class="filter-grid">' +
+      '<label>Status<select id="clf_status">' + opt("all", "All (not turned off)", f.status) + opt("active", "Active", f.status) + opt("soon", "Ending soon", f.status) +
+        opt("expired", "Expired", f.status) + opt("future", "Starts later", f.status) + opt("none", "No plan", f.status) + opt("off", "Turned off", f.status) + "</select></label>" +
+      '<label>Plan dates<select id="clf_window">' + opt("", "Any", f.window) + opt("ends:7", "Ends within 7 days", f.window) + opt("ends:15", "Ends within 15 days", f.window) +
+        opt("ends:30", "Ends within 30 days", f.window) + opt("expired:30", "Expired in last 30 days", f.window) + opt("expired:90", "Expired in last 90 days", f.window) +
+        opt("expiredbefore:90", "Expired over 90 days ago", f.window) + "</select></label>" +
+      '<label>Last visit<select id="clf_seen">' + opt("", "Any", f.seen) + opt("7", "Not seen in 7 days", f.seen) + opt("14", "Not seen in 14 days", f.seen) +
+        opt("30", "Not seen in 30 days", f.seen) + opt("never", "Never marked", f.seen) + "</select></label>" +
+      '<label>Plan<select id="clf_plan">' + opt("", "Any plan", f.plan) + plans.map(function (n) { return opt(n, n, f.plan); }).join("") + "</select></label>" +
+      '<label>Balance<select id="clf_balance">' + opt("", "Any", f.balance) + opt("due", "Has balance due", f.balance) + "</select></label>" +
+      '<label>Sort by<select id="clf_sort">' + opt("name", "Name", f.sort) + opt("end", "Ending soonest", f.sort) + opt("endlast", "Ended most recently", f.sort) +
+        opt("seen", "Longest since last visit", f.sort) + opt("since", "Member since (oldest)", f.sort) + "</select></label>" +
+    "</div>" +
+    (active ? '<div style="text-align:right"><button class="linkish" data-act="clf-clear">Clear ' + active + " filter" + (active === 1 ? "" : "s") + "</button></div>" : "") +
+  "</div>";
+}
 
 function fullDate(k) { return k ? shortDate(k) + " " + k.slice(0, 4) : "—"; }
 
@@ -96,11 +122,11 @@ function pill(st) {
   return '<span class="tag ' + cls + '">' + esc(st.short) + "</span>";
 }
 
-function clientRow(c, actions) {
+function clientRow(c, actions, extra) {
   var st = clientStatus(c);
   return '<div class="row people-row"><span class="person-cell">' + avatar(c.name, st.kind === "off" ? "dim" : "") +
     '<span><span class="who">' + esc(c.name) + "</span>" + pill(st) +
-    '<br><span class="meta">' + esc(c.plan ? c.plan.name + " · " : "") + esc(st.label) + "</span></span></span>" +
+    '<br><span class="meta">' + esc(c.plan ? c.plan.name + " · " : "") + esc(st.label) + (extra ? " · " + esc(extra) : "") + "</span></span></span>" +
     "<span>" + actions + "</span></div>";
 }
 
@@ -159,7 +185,7 @@ function detail(c) {
 export function tabClients() {
   if (!state.clLoaded) return '<div class="loading">Loading clients…</div>';
   var sub = state.clSub || "renew";
-  var html = '<div class="btnrow" style="margin-top:0"><button class="btn solid wide" data-act="cl-open">' + icons.clock + "Open attendance list (tick clients)</button></div>";
+  var html = '<div class="btnrow" style="margin-top:0"><button class="btn solid wide" data-act="cl-open">' + icons.clock + "Client sessions (take attendance)</button></div>";
   html += '<div class="tabs seg" style="margin-top:12px">' + SUBS.map(function (t) {
     var p = t.split(":");
     return '<button class="tab' + (sub === p[0] && !state.clEdit ? " sel" : "") + '" data-act="cl-sub" data-v="' + p[0] + '">' + p[1] + "</button>";
@@ -197,12 +223,16 @@ export function tabClients() {
   }
 
   if (sub === "all") {
-    var q = (state.clSearch || "").trim().toLowerCase();
-    var shown = q ? all.filter(function (x) { return x.name.toLowerCase().indexOf(q) >= 0 || clientPhone(x.id).indexOf(q) >= 0; }) : all;
-    html += '<div class="field"><input id="cl_search" type="search" autocomplete="off" placeholder="Search by name or phone…" value="' + esc(state.clSearch || "") + '" /></div>';
-    html += '<h2>' + all.length + " client" + (all.length === 1 ? "" : "s") + "</h2>" + '<div class="rows">' +
-      (shown.length ? shown.map(function (x) { return clientRow(x, waBtn(x) + '<button class="btn quiet small" data-act="cl-edit" data-id="' + esc(x.id) + '">Open</button>'); }).join("")
-                    : '<div class="empty">' + (all.length ? "No client matches." : "No clients yet — add one in “Add client”.") + "</div>") + "</div>";
+    var f = state.clFilter, shown = filterClients(f, state.clSearch), lv = lastVisits();
+    html += filterBar(f);
+    html += '<div class="list-head"><h2>' + shown.length + " of " + all.length + " client" + (all.length === 1 ? "" : "s") + "</h2>" +
+      (shown.length ? '<button class="btn quiet small" data-act="clf-export">' + icons.download + "Excel</button>" : "") + "</div>" +
+      '<div class="rows">' +
+      (shown.slice(0, 300).map(function (x) {
+        return clientRow(x, waBtn(x) + '<button class="btn quiet small" data-act="cl-edit" data-id="' + esc(x.id) + '">Open</button>',
+          lv[x.id] ? "Last visit " + shortDate(lv[x.id]) : "No visits marked");
+      }).join("") || '<div class="empty">' + (all.length ? "No client matches these filters." : "No clients yet — add one in “Add”.") + "</div>") +
+      (shown.length > 300 ? '<div class="empty">Showing the first 300 — narrow the filters or download the Excel.</div>' : "") + "</div>";
     return html + msg();
   }
 
@@ -229,6 +259,13 @@ export function tabClients() {
   var modes = Object.keys(r.byMode);
   if (modes.length) html += '<div class="rows" style="margin-top:10px">' + modes.map(function (m) {
     return '<div class="row"><span>' + esc(m) + '</span><span class="dur">' + money(r.byMode[m]) + "</span></div>"; }).join("") + "</div>";
+  var bk = Object.keys(r.byBatch).sort(function (a, b) { return r.byBatch[b] - r.byBatch[a]; });
+  if (bk.length) html += "<h2>Visits per batch</h2>" + '<div class="rows">' + bk.map(function (k) {
+    return '<div class="row"><span>' + esc(k) + '</span><span class="dur">' + r.byBatch[k] + "</span></div>"; }).join("") + "</div>";
+  var ck = Object.keys(r.sessByCoach);
+  if (ck.length) html += "<h2>Sessions taken per coach</h2>" + '<div class="rows">' + ck.map(function (k) {
+    return '<div class="row"><span>' + esc(k) + '</span><span class="dur">' + r.sessByCoach[k] + " session" + (r.sessByCoach[k] === 1 ? "" : "s") + " · " + (r.byCoach[k] || 0) + " marks</span></div>"; }).join("") + "</div>";
+  if (r.voided) html += '<p class="note">' + r.voided + " voided mark" + (r.voided === 1 ? "" : "s") + " this month (not counted; listed in the Excel).</p>";
   html += "<h2>Visits per client</h2>" + '<div class="rows">' + (on.length ? on.slice().sort(function (a, b) { return (r.visits[b.id] || 0) - (r.visits[a.id] || 0); }).map(function (x) {
     return '<div class="row"><span class="person-cell">' + avatar(x.name) + '<span class="who">' + esc(x.name) + '</span></span><span class="dur">' + (r.visits[x.id] || 0) + "</span></div>";
   }).join("") : '<div class="empty">No clients.</div>') + "</div>";

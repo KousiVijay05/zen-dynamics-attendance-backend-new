@@ -43,7 +43,30 @@ var SORTS = [["name", "Name"], ["end", "Ending soonest"], ["endlast", "Ended mos
   ["newest", "Newest joiners"], ["tenure", "Longest membership"], ["bday", "Next birthday"]];
 
 /* Long lists stay as a dropdown inside the sheet; everything else is tap-to-pick pills. */
-var AS_SELECT = { plan: 1, endym: 1 };
+var AS_SELECT = { plan: 1 };
+var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/* Expiry month as a calendar: one year at a time, each month with how many plans end in it. */
+function monthCalendar(f) {
+  var counts = {}, nowYm = today().slice(0, 7), years = [+nowYm.slice(0, 4)];
+  endMonths().forEach(function (m) { counts[m.ym] = m.n; years.push(+m.ym.slice(0, 4)); });
+  var minY = Math.min.apply(null, years), maxY = Math.max.apply(null, years);
+  var y = state.clEndYear || +(f.endym || nowYm).slice(0, 4);
+  y = Math.max(minY, Math.min(maxY, y));
+  var total = 0;
+  var cells = MONTHS.map(function (name, i) {
+    var ym = y + "-" + (i < 9 ? "0" : "") + (i + 1), n = counts[ym] || 0;
+    total += n;
+    return '<button class="mcell' + (f.endym === ym ? " on" : "") + (ym === nowYm ? " now" : "") + (ym < nowYm ? " past" : "") + '"' + (n ? "" : " disabled") +
+      ' data-act="clf-set" data-k="endym" data-v="' + ym + '" aria-label="' + name + " " + y + ", " + n + ' plans">' + name + "<b>" + (n || "–") + "</b></button>";
+  }).join("");
+  return '<div class="mcal"><div class="mcal-head">' +
+      '<button class="btn quiet small icon" data-act="clf-year" data-v="' + (y - 1) + '"' + (y <= minY ? " disabled" : "") + ' aria-label="Previous year">‹</button>' +
+      "<b>" + y + '</b><span class="meta">' + total + " plan" + (total === 1 ? "" : "s") + "</span>" +
+      '<button class="btn quiet small icon" data-act="clf-year" data-v="' + (y + 1) + '"' + (y >= maxY ? " disabled" : "") + ' aria-label="Next year">›</button></div>' +
+    '<div class="mcal-grid">' + cells + "</div>" +
+    '<p class="note" style="margin:8px 0 0">The number is how many plans end in that month. Earlier months are plans that expired and were not renewed.</p></div>';
+}
 
 function appliedFilters(f, spec) {
   var out = [];
@@ -82,7 +105,7 @@ function filterSheet(f, count) {
     '<div class="sheet-head"><b>Filters</b><button class="btn quiet small icon" data-act="clf-toggle" aria-label="Close">×</button></div>' +
     spec.map(function (g) {
       return '<div class="fgroup">' + esc(g.group) + "</div>" + g.items.map(function (it) {
-        var body = AS_SELECT[it.k]
+        var body = it.k === "endym" ? monthCalendar(f) : AS_SELECT[it.k]
           ? '<select id="clf_' + it.k + '"' + (f[it.k] !== DEFAULT_FILTER[it.k] ? ' class="set"' : "") + ">" + it.opts.map(function (x) { return opt(x[0], x[1], f[it.k]); }).join("") + "</select>"
           : '<div class="pills">' + it.opts.filter(function (x) { return x[0] !== "" ; }).map(function (x) {
               return '<button class="pill' + (f[it.k] === x[0] ? " on" : "") + '" data-act="clf-set" data-k="' + it.k + '" data-v="' + esc(x[0]) + '">' + esc(x[0] === "all" ? "All" : x[1]) + "</button>";

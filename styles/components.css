@@ -461,3 +461,26 @@ details.sess[open] > summary { background: var(--panel-2); }
 
 /* Records: per-person totals */
 .rec-sum .dur { font-weight: 800; }
+
+/* With a mouse (or a wide screen) a swipe-only row can't be reached: show every pill, wrapped. */
+@media (hover: hover) and (pointer: fine), (min-width: 640px) {
+  .pills.scroll { flex-wrap: wrap; overflow: visible; margin: 12px 0 0; padding: 0; }
+}
+
+/* Expiry month calendar */
+.mcal-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.mcal-head b { font-size: 17px; font-weight: 800; }
+.mcal-head .meta { margin-right: auto; }
+.mcal-head .btn[disabled] { opacity: .35; }
+.mcal-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.mcell {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 58px; cursor: pointer;
+  font: 650 13.5px var(--sans); color: var(--ink); background: var(--panel-raised); border: 1px solid var(--line); border-radius: var(--radius-md);
+}
+.mcell b { font-size: 12px; font-weight: 800; color: var(--gold-strong); font-variant-numeric: tabular-nums; }
+.mcell.past b { color: var(--ink3); }
+.mcell.now { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); }
+.mcell[disabled] { cursor: default; color: var(--ink3); background: transparent; border-style: dashed; }
+.mcell.on { background: var(--ink); color: var(--paper); border-color: var(--ink); box-shadow: none; }
+.mcell.on b { color: var(--gold); }
+.mcell:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }

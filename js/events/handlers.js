@@ -391,10 +391,11 @@ tasks: selectedTasks
     }
     if (act === "clf-preset") {
       var ps = presets().filter(function (p) { return p.id === t.getAttribute("data-id"); })[0];
-      if (ps) { state.clFilter = Object.assign({}, ps.f); state.clSearch = ""; emitChange(); }
+      if (ps) { state.clFilter = Object.assign({}, ps.f); state.clSearch = ""; state.clEndYear = null; emitChange(); }
       return;
     }
     if (act === "clf-toggle") { state.clFilterOpen = !state.clFilterOpen; emitChange(); return; }
+    if (act === "clf-year") { state.clEndYear = +t.getAttribute("data-v"); emitChange(); return; }
     if (act === "clf-set") {
       var sk = t.getAttribute("data-k"), sv = t.getAttribute("data-v");
       state.clFilter = Object.assign({}, state.clFilter);
@@ -407,7 +408,7 @@ tasks: selectedTasks
       var rk = t.getAttribute("data-k");
       state.clFilter = Object.assign({}, state.clFilter); state.clFilter[rk] = DEFAULT_FILTER[rk]; emitChange(); return;
     }
-    if (act === "clf-clear") { state.clFilter = Object.assign({}, DEFAULT_FILTER); state.clSearch = ""; emitChange(); return; }
+    if (act === "clf-clear") { state.clFilter = Object.assign({}, DEFAULT_FILTER); state.clSearch = ""; state.clEndYear = null; emitChange(); return; }
     if (act === "clf-export") { try { say(exportFiltered(filterClients(state.clFilter, state.clSearch)), true); } catch (err) { say(err.message); } return; }
     if (act === "addpkg") {
       try {

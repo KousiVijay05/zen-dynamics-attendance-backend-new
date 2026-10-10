@@ -1034,3 +1034,14 @@ Fixes:
   keeps the Weekly and month buttons.
 - **Excel** follows the period: a Summary sheet and a Punches sheet, in a
   file named by its dates. By month still gives the full payroll workbook.
+
+## 2026-10-10 — Pills reachable with a mouse; expiry month as a calendar (v39)
+
+- The smart lists and the Records period pills were a swipe-only row with
+  the scrollbar hidden, so on a computer the ones at the end could not be
+  reached. With a mouse, or on a screen 640px or wider, they now wrap
+  onto extra lines. Phones keep the swipe row.
+- **Expiry month** in the filter sheet is a calendar instead of a long
+  dropdown: a year with ‹ › arrows and a 12-month grid. Each month shows
+  how many plans end in it. Months with none cannot be tapped, and the
+  current month is outlined. Tap a month to filter; tap again to undo.

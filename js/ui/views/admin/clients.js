@@ -8,47 +8,72 @@ import { clientStatus, clientPhone, usedSessions, suggestedStart, today, monthRe
 
 function opt(v, label, cur) { return '<option value="' + esc(v) + '"' + (v === cur ? " selected" : "") + ">" + esc(label) + "</option>"; }
 
-/* The filter panel for the Clients list. Every change re-filters at once. */
-function filterBar(f) {
-  var plans = planNames();
-  var active = Object.keys(DEFAULT_FILTER).filter(function (k) { return k !== "sort" && f[k] !== DEFAULT_FILTER[k]; }).length;
+/* Every filter: key, label, and its choices as [value, text]. Grouped for the panel. */
+function filterSpec() {
   var nowYm = today().slice(0, 7);
-  return '<div class="filters">' +
+  return [
+    { group: "Membership", items: [
+      { k: "status", label: "Status", opts: [["all", "All (not turned off)"], ["current", "Active + ending soon"], ["active", "Active"], ["soon", "Ending soon"], ["expired", "Expired"],
+        ["paused", "Paused"], ["future", "Starts later"], ["none", "No plan"], ["off", "Turned off"]] },
+      { k: "length", label: "Length", opts: [["", "Any length"], ["1", "Monthly"], ["3", "3 months"], ["6", "6 months"], ["12", "Yearly"], ["pack", "Session packs"]] },
+      { k: "plan", label: "Plan", opts: [["", "Any plan"]].concat(planNames().map(function (n) { return [n, n]; })) },
+      { k: "renewed", label: "Renewals", opts: [["", "Any"], ["first", "First membership"], ["renewed", "Renewed at least once"], ["3", "3 or more memberships"]] }
+    ] },
+    { group: "Dates", items: [
+      { k: "endym", label: "Expiry month", opts: [["", "Any month"]].concat(endMonths().map(function (m) {
+        return [m.ym, (m.ym < nowYm ? "Expired " : m.ym === nowYm ? "This month · " : "Ends ") + monthLabel(m.ym) + " (" + m.n + ")"]; })) },
+      { k: "window", label: "Ending / expired", opts: [["", "Any"], ["ends:7", "Ends within 7 days"], ["ends:15", "Ends within 15 days"], ["ends:30", "Ends within 30 days"],
+        ["expired:30", "Expired in last 30 days"], ["expired:90", "Expired in last 90 days"], ["expiredbefore:30", "Expired over 30 days ago"], ["expiredbefore:90", "Expired over 90 days ago"]] },
+      { k: "joined", label: "Joined", opts: [["", "Any time"], ["this", "This month"], ["last", "Last month"], ["90", "Last 90 days"], ["year", "This year"], ["before", "Before this year"]] },
+      { k: "tenure", label: "Member for", opts: [["", "Any"], ["0", "Under 1 month"], ["1", "1–3 months"], ["3", "3–6 months"], ["6", "6–12 months"], ["12", "1 year or more"]] }
+    ] },
+    { group: "Visits, payments, birthday", items: [
+      { k: "seen", label: "Last visit", opts: [["", "Any"], ["7", "Not seen in 7 days"], ["14", "Not seen in 14 days"], ["30", "Not seen in 30 days"], ["never", "Never marked"]] },
+      { k: "paid", label: "Paid", opts: [["", "Any"], ["this", "Paid this month"], ["last", "Paid last month"], ["notthis", "Not paid this month"], ["lastnotthis", "Paid last month, not this month"]] },
+      { k: "balance", label: "Balance", opts: [["", "Any"], ["due", "Has balance due"]] },
+      { k: "bday", label: "Birthday", opts: [["", "Any"], ["today", "Today"], ["7", "In the next 7 days"], ["month", "This month"], ["next", "Next month"], ["none", "Not recorded"]] }
+    ] }
+  ];
+}
+
+/* Filters whose choice already says what it is ("Expired", "Paid this month") need no label on the chip. */
+var BARE = { status: 1, length: 1, renewed: 1, endym: 1, window: 1, seen: 1, paid: 1, balance: 1 };
+
+var SORTS = [["name", "Name"], ["end", "Ending soonest"], ["endlast", "Ended most recently"], ["seen", "Longest since last visit"], ["since", "Member since (oldest)"],
+  ["newest", "Newest joiners"], ["tenure", "Longest membership"], ["bday", "Next birthday"]];
+
+/* Filters for the Clients list: quick lists, search, one Filters button, and what's applied as removable chips. */
+function filterBar(f) {
+  var spec = filterSpec(), applied = [];
+  spec.forEach(function (g) { g.items.forEach(function (it) {
+    if (f[it.k] === DEFAULT_FILTER[it.k]) return;
+    var o = it.opts.filter(function (x) { return x[0] === f[it.k]; })[0];
+    applied.push({ k: it.k, text: (BARE[it.k] ? "" : it.label + ": ") + (o ? o[1].replace(/ \(\d+\)$/, "").replace(/^This month · /, "Ends ") : f[it.k]) });
+  }); });
+  var open = !!state.clFilterOpen;
+  var html = '<div class="filters">' +
     '<div class="quick">' + presets().map(function (p) {
       var on = Object.keys(DEFAULT_FILTER).every(function (k) { return f[k] === p.f[k]; });
       return '<button class="chip-btn' + (on ? " on" : "") + '" data-act="clf-preset" data-id="' + p.id + '">' + esc(p.label) + " <b>" + p.n + "</b></button>";
     }).join("") + "</div>" +
     '<div class="field"><input id="cl_search" type="search" autocomplete="off" placeholder="Search name or phone…" value="' + esc(state.clSearch || "") + '" /></div>' +
-    '<div class="filter-grid">' +
-      '<label>Status<select id="clf_status">' + opt("all", "All (not turned off)", f.status) + opt("current", "Active + ending soon", f.status) + opt("active", "Active", f.status) + opt("soon", "Ending soon", f.status) +
-        opt("expired", "Expired", f.status) + opt("paused", "Paused", f.status) + opt("future", "Starts later", f.status) + opt("none", "No plan", f.status) + opt("off", "Turned off", f.status) + "</select></label>" +
-      '<label>Plan dates<select id="clf_window">' + opt("", "Any", f.window) + opt("ends:7", "Ends within 7 days", f.window) + opt("ends:15", "Ends within 15 days", f.window) +
-        opt("ends:30", "Ends within 30 days", f.window) + opt("expired:30", "Expired in last 30 days", f.window) + opt("expired:90", "Expired in last 90 days", f.window) +
-        opt("expiredbefore:30", "Expired over 30 days ago", f.window) + opt("expiredbefore:90", "Expired over 90 days ago", f.window) + "</select></label>" +
-      '<label>Expiry month<select id="clf_endym">' + opt("", "Any month", f.endym) + endMonths().map(function (m) {
-        return opt(m.ym, (m.ym < nowYm ? "Expired " : m.ym === nowYm ? "This month · " : "Ends ") + monthLabel(m.ym) + " (" + m.n + ")", f.endym); }).join("") + "</select></label>" +
-      '<label>Last visit<select id="clf_seen">' + opt("", "Any", f.seen) + opt("7", "Not seen in 7 days", f.seen) + opt("14", "Not seen in 14 days", f.seen) +
-        opt("30", "Not seen in 30 days", f.seen) + opt("never", "Never marked", f.seen) + "</select></label>" +
-      '<label>Plan<select id="clf_plan">' + opt("", "Any plan", f.plan) + plans.map(function (n) { return opt(n, n, f.plan); }).join("") + "</select></label>" +
-      '<label>Membership<select id="clf_length">' + opt("", "Any length", f.length) + opt("1", "Monthly", f.length) + opt("3", "3 months", f.length) +
-        opt("6", "6 months", f.length) + opt("12", "Yearly", f.length) + opt("pack", "Session packs", f.length) + "</select></label>" +
-      '<label>Member for<select id="clf_tenure">' + opt("", "Any", f.tenure) + opt("0", "Under 1 month", f.tenure) + opt("1", "1–3 months", f.tenure) +
-        opt("3", "3–6 months", f.tenure) + opt("6", "6–12 months", f.tenure) + opt("12", "1 year or more", f.tenure) + "</select></label>" +
-      '<label>Joined<select id="clf_joined">' + opt("", "Any time", f.joined) + opt("this", "This month", f.joined) + opt("last", "Last month", f.joined) +
-        opt("90", "Last 90 days", f.joined) + opt("year", "This year", f.joined) + opt("before", "Before this year", f.joined) + "</select></label>" +
-      '<label>Renewals<select id="clf_renewed">' + opt("", "Any", f.renewed) + opt("first", "First membership", f.renewed) + opt("renewed", "Renewed at least once", f.renewed) +
-        opt("3", "3 or more memberships", f.renewed) + "</select></label>" +
-      '<label>Birthday<select id="clf_bday">' + opt("", "Any", f.bday) + opt("today", "Today", f.bday) + opt("7", "In the next 7 days", f.bday) +
-        opt("month", "This month", f.bday) + opt("next", "Next month", f.bday) + opt("none", "Not recorded", f.bday) + "</select></label>" +
-      '<label>Paid<select id="clf_paid">' + opt("", "Any", f.paid) + opt("this", "Paid this month", f.paid) + opt("last", "Paid last month", f.paid) +
-        opt("notthis", "Not paid this month", f.paid) + opt("lastnotthis", "Paid last month, not this month", f.paid) + "</select></label>" +
-      '<label>Balance<select id="clf_balance">' + opt("", "Any", f.balance) + opt("due", "Has balance due", f.balance) + "</select></label>" +
-      '<label>Sort by<select id="clf_sort">' + opt("name", "Name", f.sort) + opt("end", "Ending soonest", f.sort) + opt("endlast", "Ended most recently", f.sort) +
-        opt("seen", "Longest since last visit", f.sort) + opt("since", "Member since (oldest)", f.sort) + opt("newest", "Newest joiners", f.sort) + opt("tenure", "Longest membership", f.sort) + opt("bday", "Next birthday", f.sort) + "</select></label>" +
-    "</div>" +
-    (f.paid && !payMonthsLoaded() ? '<div class="loading">Loading payments…</div>' : "") +
-    (active ? '<div style="text-align:right"><button class="linkish" data-act="clf-clear">Clear ' + active + " filter" + (active === 1 ? "" : "s") + "</button></div>" : "") +
-  "</div>";
+    '<div class="filter-tools"><button class="btn quiet small' + (applied.length ? " has" : "") + '" data-act="clf-toggle" aria-expanded="' + open + '">' + icons.filter +
+      "Filters" + (applied.length ? " · " + applied.length : "") + "</button>" +
+      '<label class="sort-pick"><span>Sort</span><select id="clf_sort">' + SORTS.map(function (x) { return opt(x[0], x[1], f.sort); }).join("") + "</select></label></div>";
+  if (applied.length) {
+    html += '<div class="applied">' + applied.map(function (a) {
+      return '<button class="chip-btn on" data-act="clf-remove" data-k="' + a.k + '" aria-label="Remove filter ' + esc(a.text) + '">' + esc(a.text) + " <b>×</b></button>";
+    }).join("") + '<button class="linkish" data-act="clf-clear">Clear all</button></div>';
+  }
+  if (open) {
+    html += '<div class="filter-panel">' + spec.map(function (g) {
+      return '<div class="filter-group">' + esc(g.group) + '</div><div class="filter-grid">' + g.items.map(function (it) {
+        return "<label>" + esc(it.label) + '<select id="clf_' + it.k + '"' + (f[it.k] !== DEFAULT_FILTER[it.k] ? ' class="set"' : "") + ">" +
+          it.opts.map(function (x) { return opt(x[0], x[1], f[it.k]); }).join("") + "</select></label>";
+      }).join("") + "</div>";
+    }).join("") + '<div class="btnrow"><button class="btn go wide" data-act="clf-toggle">Show results</button></div></div>';
+  }
+  return html + (f.paid && !payMonthsLoaded() ? '<div class="loading">Loading payments…</div>' : "") + "</div>";
 }
 
 function tenureText(c) {
@@ -345,7 +370,7 @@ export function tabClients() {
   }
 
   if (sub === "all") {
-    var f = state.clFilter, shown = filterClients(f, state.clSearch), lv = lastVisits();
+    var f = Object.assign({}, DEFAULT_FILTER, state.clFilter), shown = filterClients(f, state.clSearch), lv = lastVisits();
     html += filterBar(f);
     html += '<div class="list-head"><h2>' + shown.length + " of " + all.length + " client" + (all.length === 1 ? "" : "s") + "</h2>" +
       (shown.length ? '<button class="btn quiet small" data-act="clf-export">' + icons.download + "Excel</button>" : "") + "</div>" +

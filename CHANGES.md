@@ -992,3 +992,21 @@ join date, membership length, renewal history).
   - Pauses are kept on the plan and shown in the membership history.
   - A paused monthly plan still counts as Monthly in the Membership filter.
 - Excel export gains a Birthday column.
+
+## 2026-10-10 — Compact client filter bar (v37)
+
+The twelve filter boxes took over the screen. The bar is now:
+
+- quick lists (unchanged), then search;
+- one **Filters** button showing how many are applied, with **Sort** next
+  to it;
+- the applied filters as chips ("Monthly ×", "Birthday: Not recorded ×").
+  Tap one to remove it, or **Clear all**;
+- the full list of filters opens only when Filters is tapped, grouped into
+  Membership, Dates, and Visits/payments/birthday. **Show results** closes it.
+
+Fixes:
+
+- "Clear 3 filters" showed while every box said "Any". The newer filters
+  started out empty instead of "Any", so they were counted as applied.
+- A select box now always shows the value that is actually applied.

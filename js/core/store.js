@@ -27,7 +27,7 @@ export var state = {
   editId: null, editShiftId: null, adminOnly: false,
   /* clients module (domain/clients.js) */
   clients: [], clientPriv: {}, clAtt: {}, clSess: {}, clPays: {}, clOld: {}, clLoaded: false, session: null,
-  clFilter: { status: "all", window: "", seen: "", plan: "", balance: "", sort: "name" },
+  clFilter: {},   // missing keys mean "any"; see DEFAULT_FILTER
   clSub: "renew", clEdit: null, clSearch: "", clMonth: null, clAddType: "time", clRenewType: null, clBack: "staff", clImport: null, clImportBusy: false, clAddPkg: null, clRenewPkg: null, staffNames: [],
   /* attendance image being previewed before sharing: { url, file, caption, key } */
   waPreview: null, waBusy: false,

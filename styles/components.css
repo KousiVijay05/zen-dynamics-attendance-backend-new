@@ -363,7 +363,7 @@ details.sess > .rows { border: 0; border-top: 1px solid var(--line2); border-rad
 .filters .field { margin-top: 0; }
 .filter-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
 .filter-grid label { font-size: 12px; font-weight: 650; color: var(--ink2); display: flex; flex-direction: column; gap: 5px; min-width: 0; }
-.filter-grid select {
+.filter-grid select, .sort-pick select {
   width: 100%; min-height: 42px; padding: 8px 30px 8px 10px; font-size: 14px; font-family: var(--sans); font-weight: 600; color: var(--ink);
   border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--panel-raised); -webkit-appearance: none; appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23A9832F' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
@@ -385,3 +385,15 @@ details.sess[open] > summary { background: var(--panel-2); }
 .quick .chip-btn.on { background: var(--gold-soft); border-color: var(--gold); }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .grid2 .field { margin-top: 0; min-width: 0; }
+.filter-tools { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.filter-tools .btn { flex: none; }
+.filter-tools .btn.has { border-color: var(--gold); background: var(--gold-soft); color: var(--ink); }
+.sort-pick { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 650; color: var(--ink2); }
+.sort-pick select { flex: 1; min-width: 0; }
+.applied { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.applied .chip-btn { min-height: 32px; padding: 5px 10px; font-size: 12.5px; }
+.applied .chip-btn b { margin-left: 4px; }
+.filter-panel { margin-top: 12px; padding-top: 4px; border-top: 1px solid var(--line); }
+.filter-group { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink3); margin-top: 12px; }
+.filter-panel .filter-grid { margin-top: 6px; }
+.filter-grid select.set { border-color: var(--gold); background-color: var(--gold-soft); }

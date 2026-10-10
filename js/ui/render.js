@@ -110,6 +110,10 @@ function patch(a, b) {
     return;
   }
   morphChildren(a, b);
+  if (a.tagName === "SELECT") {                       // show exactly what was drawn, whatever was tapped before
+    var want = b.querySelector("option[selected]") || b.options[0];
+    if (want && a.value !== want.value) a.value = want.value;
+  }
 }
 
 function view() {

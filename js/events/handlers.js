@@ -388,6 +388,11 @@ tasks: selectedTasks
       if (ps) { state.clFilter = Object.assign({}, ps.f); state.clSearch = ""; emitChange(); }
       return;
     }
+    if (act === "clf-toggle") { state.clFilterOpen = !state.clFilterOpen; emitChange(); return; }
+    if (act === "clf-remove") {
+      var rk = t.getAttribute("data-k");
+      state.clFilter = Object.assign({}, state.clFilter); state.clFilter[rk] = DEFAULT_FILTER[rk]; emitChange(); return;
+    }
     if (act === "clf-clear") { state.clFilter = Object.assign({}, DEFAULT_FILTER); state.clSearch = ""; emitChange(); return; }
     if (act === "clf-export") { try { say(exportFiltered(filterClients(state.clFilter, state.clSearch)), true); } catch (err) { say(err.message); } return; }
     if (act === "addpkg") {

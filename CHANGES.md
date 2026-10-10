@@ -1075,3 +1075,27 @@ The same choices are available in the filter sheet.
   were ticked, and the confirmation after Submit repeats their names.
 - Coaches still see names, plans and dates only: no phones, no payments.
   Expired clients can still be ticked.
+
+## 2026-10-10 — Spreadsheet views for clients and payments (v41)
+
+**Clients → Clients → Sheet.** A List | Sheet switch beside Sort. The sheet
+shows the filtered clients as rows, 50 per page, with the name column
+pinned while you scroll sideways.
+
+- Editable (white): Name, Phone, Plan, Start, End, Member since, Birthday,
+  Notes.
+- Calculated (grey): Status, Days left, Member for, Last visit. These
+  update as soon as a date is changed, before saving, so the effect of an
+  edit is visible first.
+- Edited cells are highlighted. Nothing is written until **Save N
+  changes**; **Discard** puts everything back. All rows save in one write.
+  If any row is invalid (bad phone, end before start, empty name) nothing
+  is saved and the message names the row.
+- When a plan's dates or name change, its payments stay attached to it.
+
+**Clients → Reports → Payments → Edit sheet.** The month's payments as a
+sheet: change the date, amount or how it was paid, or tick Delete. The
+total updates as you type. Changing a date to another month moves the
+payment there. Deleting asks for confirmation.
+
+Admins only; the database rules already limit these records to admins.

@@ -514,3 +514,32 @@ details.sess[open] > summary { background: var(--panel-2); }
 .remind-note { margin-top: 12px; padding: 10px 14px; font-size: 13.5px; line-height: 1.4; color: var(--ink); background: var(--gold-soft); border: 1px solid var(--gold); border-radius: var(--radius-md); }
 .cl-launch span .cl-alert { display: inline-block; margin-top: 3px; font-size: 12.5px; font-weight: 700; color: var(--gold-strong); }
 @media (prefers-color-scheme: dark) { .tag.warn { color: #FFB4AB; background: #4A1F1B; } .renew-flag.expired { color: #FFB4AB; } }
+
+/* ---------- spreadsheet view ---------- */
+.view-toggle { display: inline-flex; padding: 3px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; }
+.view-toggle button { min-height: 28px; padding: 0 12px; cursor: pointer; font: 650 12.5px var(--sans); color: var(--ink2); background: transparent; border: 0; border-radius: 999px; white-space: nowrap; }
+.view-toggle button.on { background: var(--ink); color: var(--paper); }
+.sheet-wrap { margin-top: 10px; overflow: auto; max-height: 72vh; background: var(--panel-raised); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); -webkit-overflow-scrolling: touch; }
+.gsheet { border-collapse: separate; border-spacing: 0; font: 500 13.5px var(--sans); color: var(--ink); white-space: nowrap; }
+.gsheet th { position: sticky; top: 0; z-index: 2; padding: 9px 10px; text-align: left; font-size: 11.5px; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; color: var(--ink2); background: var(--panel); border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); }
+.gsheet td { padding: 0; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); background: var(--panel-raised); }
+.gsheet td.ro, .gsheet td.num { padding: 0 10px; color: var(--ink2); background: var(--panel); }
+.gsheet th.ro { color: var(--ink3); }
+.gsheet td.num, .gsheet th.num { text-align: right; color: var(--ink3); font-variant-numeric: tabular-nums; min-width: 34px; }
+.gsheet td.n, .gsheet input.n { text-align: right; font-variant-numeric: tabular-nums; }
+.gsheet td.c { text-align: center; padding: 0 10px; }
+.gsheet .stick { position: sticky; left: 0; z-index: 1; box-shadow: 1px 0 0 var(--line); }
+.gsheet th.stick { z-index: 3; }
+.gsheet input.sh, .gsheet input.shp:not([type=checkbox]), .gsheet select.shp {
+  display: block; min-height: 40px; padding: 0 10px; font: inherit; color: inherit; background: transparent; border: 0; border-radius: 0; outline: none; box-sizing: border-box;
+}
+.gsheet select.shp { width: 96px; }
+.gsheet input[type=checkbox].shp { width: 20px; height: 20px; accent-color: #B4231B; vertical-align: middle; }
+.gsheet td.e:focus-within { box-shadow: inset 0 0 0 2px var(--gold); }
+.gsheet td.dirty { background: var(--gold-soft); }
+.gsheet tr.gone td { text-decoration: line-through; opacity: .55; }
+.gsheet tfoot td { position: sticky; bottom: 0; background: var(--panel); min-height: 38px; height: 38px; border-top: 1px solid var(--line); }
+.pager { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; font-size: 13px; color: var(--ink2); }
+.list-head { row-gap: 8px; }
+.list-tools { flex-wrap: wrap; justify-content: flex-end; row-gap: 8px; max-width: 100%; }
+.sheet-wrap { max-width: 100%; }

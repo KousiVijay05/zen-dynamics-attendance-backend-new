@@ -33,7 +33,7 @@ import { exportExcel, exportRange } from "../domain/excel.js";
 import { requestLeave, cancelLeave, decideLeave, allLeaves } from "../domain/leave.js";
 import {
   addClient, updateClient, renewClient, setClientActive, reminderText, waLinkTo, clientPhone,
-  startSession, discardSession, togglePick, submitSession, voidMark, markToday, canVoid, filterClients, exportFiltered, DEFAULT_FILTER, loadPayMonths, presets, pauseClient, endPause, birthdayText,
+  startSession, discardSession, togglePick, submitSession, voidMark, markToday, canVoid, filterClients, exportFiltered, DEFAULT_FILTER, loadPayMonths, presets, sheetEdit, saveSheet, payEdit, savePaySheet, pauseClient, endPause, birthdayText,
   loadMonth, exportClientsExcel, today as clToday, downloadTemplate, readImportFile, importClients,
   loadAllPayments, exportFullHistory, importAccounts
 } from "../domain/clients.js";
@@ -69,6 +69,10 @@ export function initEvents() {
   root.addEventListener("change", function (ev) {
     if (ev.target.id === "cl_month") { state.clMonth = ev.target.value; emitChange(); loadMonth(state.clMonth); }
     if (ev.target.id === "ca_type") { state.clAddType = ev.target.value; emitChange(); }
+    if (ev.target.classList && ev.target.classList.contains("sh")) { sheetEdit(ev.target.getAttribute("data-id"), ev.target.getAttribute("data-f"), ev.target.value); state.msg = ""; emitChange(); }
+    if (ev.target.classList && ev.target.classList.contains("shp")) {
+      payEdit(ev.target.getAttribute("data-id"), ev.target.getAttribute("data-f"), ev.target.type === "checkbox" ? ev.target.checked : ev.target.value); state.msg = ""; emitChange();
+    }
     if (ev.target.id === "ca_pkg") { state.clAddPkg = ev.target.value; emitChange(); }
     if (ev.target.id === "cr_pkg") { state.clRenewPkg = ev.target.value; emitChange(); }
     var fm = /^clf_(status|window|endym|seen|plan|length|tenure|joined|renewed|bday|paid|balance|sort)$/.exec(ev.target.id);
@@ -387,6 +391,24 @@ tasks: selectedTasks
       if (reason === null) return;
       voidMark(clToday(), id, reason || "Marked by mistake")
         .then(function (msg) { sayAndPaint(msg, true); }).catch(function (err) { say(err.message); });
+      return;
+    }
+    if (act === "cl-view") { state.clView = t.getAttribute("data-v"); state.clSheetPage = 0; state.msg = ""; emitChange(); return; }
+    if (act === "cl-payview") { state.clPayView = t.getAttribute("data-v"); state.msg = ""; emitChange(); return; }
+    if (act === "cl-sheet-page") { state.clSheetPage = +t.getAttribute("data-v"); emitChange(); window.scrollTo(0, 0); return; }
+    if (act === "cl-sheet-discard") { state.clSheet = {}; state.msg = ""; emitChange(); return; }
+    if (act === "cl-pay-discard") { state.clPaySheet = {}; state.msg = ""; emitChange(); return; }
+    if (act === "cl-sheet-save") {
+      try { t.disabled = true; saveSheet().then(function (msg) { sayAndPaint(msg, true); }).catch(function (err) { t.disabled = false; say(err.message); }); } catch (err) { t.disabled = false; say(err.message); }
+      return;
+    }
+    if (act === "cl-pay-save") {
+      try {
+        var dn = Object.keys(state.clPaySheet || {}).filter(function (k) { return state.clPaySheet[k].del; }).length;
+        if (dn && !wConfirm("Delete " + dn + " payment" + (dn === 1 ? "" : "s") + "? This can't be undone.")) return;
+        t.disabled = true;
+        savePaySheet(state.clMonth || clToday().slice(0, 7)).then(function (msg) { sayAndPaint(msg, true); }).catch(function (err) { t.disabled = false; say(err.message); });
+      } catch (err) { t.disabled = false; say(err.message); }
       return;
     }
     if (act === "clf-group") { state.clListGroup = t.getAttribute("data-v"); emitChange(); loadPayMonths().catch(function () {}); return; }

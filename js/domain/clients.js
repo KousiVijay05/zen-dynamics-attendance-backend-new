@@ -742,6 +742,154 @@ export function endPause(id) {
   });
 }
 
+/* ---------- sheet view: edit many clients / payments like a spreadsheet ---------- */
+
+var SHEET_FIELDS = ["name", "phone", "plan", "start", "end", "joined", "dob", "notes"];
+
+/** A client's editable values, with any unsaved sheet edits on top. */
+export function sheetRow(c) {
+  var pv = (state.clientPriv || {})[c.id] || {}, p = c.plan || {};
+  var base = { name: c.name, phone: pv.phone || "", plan: p.name || "", start: p.start || "", end: p.end || "", joined: c.joined || "", dob: pv.dob || "", notes: pv.notes || "" };
+  var ed = (state.clSheet || {})[c.id] || {}, out = {}, dirty = {};
+  SHEET_FIELDS.forEach(function (f) { out[f] = f in ed ? ed[f] : base[f]; if (f in ed && String(ed[f]) !== String(base[f])) dirty[f] = true; });
+  out.dirty = dirty;
+  return out;
+}
+
+/** The client as it would be after the unsaved edits (for the calculated columns). */
+export function sheetPreview(c) {
+  var r = sheetRow(c);
+  if (!Object.keys(r.dirty).length) return c;
+  var plan = c.plan ? Object.assign({}, c.plan, { name: r.plan || c.plan.name, start: r.start, end: r.end }) : (r.start ? { type: "time", name: r.plan || "Custom", start: r.start, end: r.end } : null);
+  return Object.assign({}, c, { name: r.name, joined: r.joined, plan: plan });
+}
+
+/** Record one cell edit (kept in memory until Save). */
+export function sheetEdit(id, field, value) {
+  if (SHEET_FIELDS.indexOf(field) < 0) return;
+  state.clSheet = Object.assign({}, state.clSheet);
+  state.clSheet[id] = Object.assign({}, state.clSheet[id]);
+  state.clSheet[id][field] = String(value == null ? "" : value).trim();
+  var c = state.clients.filter(function (x) { return x.id === id; })[0];
+  if (c && !Object.keys(sheetRow(c).dirty).length) delete state.clSheet[id];        // typed back to the original
+}
+
+export function sheetChanges() {
+  var n = 0;
+  state.clients.forEach(function (c) { if ((state.clSheet || {})[c.id]) n += Object.keys(sheetRow(c).dirty).length; });
+  return n;
+}
+
+/** Save every edited row in one write. Nothing is saved if any row is invalid. */
+export function saveSheet() {
+  var roster = state.clients.map(function (c) { return Object.assign({}, c); });
+  var priv = JSON.parse(JSON.stringify(state.clientPriv || {}));
+  var changed = 0, moved = [];
+  roster.forEach(function (c, i) {
+    var r = sheetRow(c);
+    if (!Object.keys(r.dirty).length) return;
+    var row = "Row " + (c.name || "?") + ": ";
+    try {
+      if (!r.name) throw new Error("the name can't be empty.");
+      if (r.name.length > 80) throw new Error("that name is too long.");
+      var phone = cleanPhone(r.phone), dob = cleanDob(r.dob);
+      if (r.joined && !validDate(r.joined)) throw new Error("“Member since” isn't a valid date.");
+      if (r.start && !validDate(r.start)) throw new Error("the start date isn't valid.");
+      if (r.end && !validDate(r.end)) throw new Error("the end date isn't valid.");
+      if (r.end && !r.start) throw new Error("give a start date too.");
+      if (r.start && r.end && r.end < r.start) throw new Error("the end date is before the start date.");
+      if (r.plan.length > 60) throw new Error("the plan name is too long.");
+      var old = c.plan;
+      if (old) {
+        if (!r.start) throw new Error("the start date can't be empty (to remove a plan, renew or turn the client off).");
+        if (old.type !== "pack" && !r.end) throw new Error("the end date can't be empty.");
+        var plan = Object.assign({}, old, { name: r.plan || old.name, start: r.start });
+        if (r.end) plan.end = r.end; else delete plan.end;
+        if (plan.name !== old.name) delete plan.pkg;               // no longer the built-in package
+        if (old.start !== plan.start || (old.end || "") !== (plan.end || "") || old.name !== plan.name) moved.push({ id: c.id, from: old, to: plan });
+        c.plan = plan;
+      } else if (r.start) {
+        if (!r.end) throw new Error("give an end date too.");
+        c.plan = { type: "time", name: r.plan || "Custom", start: r.start, end: r.end };
+      }
+      c.name = r.name; c.joined = r.joined || c.joined;
+      priv[c.id] = Object.assign({ history: [] }, priv[c.id], { phone: phone, notes: r.notes.slice(0, 500), dob: dob });
+      if (!dob) delete priv[c.id].dob;
+      changed++;
+    } catch (e) { throw new Error(row + e.message.charAt(0).toLowerCase() + e.message.slice(1)); }
+  });
+  if (!changed) return Promise.reject(new Error("Nothing to save."));
+  /* Payments are tied to a plan by its start date: keep them attached when the dates or name change. */
+  var prep = moved.length ? loadAllPayments() : Promise.resolve();
+  return prep.then(function () {
+    var paths = {}, lists = {};
+    paths["kv/cl:roster"] = JSON.stringify(roster); paths["kv/cl:private"] = JSON.stringify(priv);
+    moved.forEach(function (m) {
+      Object.keys(state.clPays || {}).forEach(function (k) {
+        (state.clPays[k] || []).forEach(function (pay, i) {
+          if (pay.clientId !== m.id || pay.start !== m.from.start) return;
+          lists[k] = lists[k] || state.clPays[k].slice();
+          lists[k][i] = Object.assign({}, pay, { plan: m.to.name, start: m.to.start, end: m.to.end || null });
+        });
+      });
+    });
+    Object.keys(lists).forEach(function (k) { paths["kv/" + k] = JSON.stringify(lists[k]); });
+    return A().update(paths).then(function () {
+      Object.keys(lists).forEach(function (k) { state.clPays[k] = lists[k]; });
+      state.clients = roster; state.clientPriv = priv; state.clSheet = {}; watchTicks(); emitChange();
+      return changed + " client" + (changed === 1 ? "" : "s") + " updated.";
+    });
+  });
+}
+
+/** One month's payments with unsaved edits on top: [{ p, date, amount, mode, del, dirty }]. */
+export function paySheetRows(ym) {
+  var list = ((state.clPays || {})["cl:pay:" + ym.replace("-", "")] || []).slice().sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+  return list.map(function (p) {
+    var ed = (state.clPaySheet || {})[p.id] || {};
+    var r = { p: p, date: "date" in ed ? ed.date : p.date, amount: "amount" in ed ? ed.amount : String(p.amount), mode: "mode" in ed ? ed.mode : p.mode, del: !!ed.del };
+    r.dirty = { date: r.date !== p.date, amount: String(r.amount) !== String(p.amount), mode: r.mode !== p.mode };
+    r.changed = r.del || r.dirty.date || r.dirty.amount || r.dirty.mode;
+    return r;
+  });
+}
+
+export function payEdit(id, field, value) {
+  state.clPaySheet = Object.assign({}, state.clPaySheet);
+  state.clPaySheet[id] = Object.assign({}, state.clPaySheet[id]);
+  state.clPaySheet[id][field] = field === "del" ? !!value : String(value == null ? "" : value).trim();
+}
+
+/** Save edited / deleted payments of month `ym`. A changed date can move a payment to another month. */
+export function savePaySheet(ym) {
+  var key = "cl:pay:" + ym.replace("-", ""), rows = paySheetRows(ym).filter(function (r) { return r.changed; });
+  if (!rows.length) return Promise.reject(new Error("Nothing to save."));
+  var out = {}, del = 0, upd = 0;
+  rows.forEach(function (r) {
+    if (r.del) { del++; return; }
+    var amt = num(r.amount, NaN);
+    if (!(amt > 0) || amt > 10000000) throw new Error(r.p.name + ": enter a valid amount.");
+    if (!validDate(r.date) || r.date > today()) throw new Error(r.p.name + ": the payment date isn't valid (or is in the future).");
+    if (PAY_MODES.indexOf(r.mode) < 0) throw new Error(r.p.name + ": pick how it was paid.");
+    out[r.p.id] = Object.assign({}, r.p, { amount: Math.round(amt * 100) / 100, date: r.date, mode: r.mode }); upd++;
+  });
+  var gone = {}; rows.forEach(function (r) { gone[r.p.id] = true; });
+  var targets = {}; Object.keys(out).forEach(function (id) { targets["cl:pay:" + out[id].date.slice(0, 7).replace("-", "")] = true; });
+  targets[key] = true;
+  var keys = Object.keys(targets);
+  return Promise.all(keys.map(function (k) { return sget(k, true); })).then(function (lists) {
+    var paths = {}, fresh = {};
+    keys.forEach(function (k, i) { fresh[k] = (Array.isArray(lists[i]) ? lists[i] : []).filter(function (p) { return !(k === key && gone[p.id]); }); });
+    Object.keys(out).forEach(function (id) { fresh["cl:pay:" + out[id].date.slice(0, 7).replace("-", "")].push(out[id]); });
+    keys.forEach(function (k) { paths["kv/" + k] = JSON.stringify(fresh[k]); });
+    return A().update(paths).then(function () {
+      keys.forEach(function (k) { state.clPays[k] = fresh[k]; });
+      state.clPaySheet = {}; emitChange();
+      return (upd ? upd + " payment" + (upd === 1 ? "" : "s") + " updated" : "") + (upd && del ? " · " : "") + (del ? del + " deleted" : "") + ".";
+    });
+  });
+}
+
 export function setClientActive(id, on) {
   var roster = state.clients.map(function (x) { return x.id === id ? Object.assign({}, x, { active: !!on }) : x; });
   return save(roster, state.clientPriv, null).then(function () { state.clients = roster; emitChange(); return on ? "Client restored." : "Client turned off."; });

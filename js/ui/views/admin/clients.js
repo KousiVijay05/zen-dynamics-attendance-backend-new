@@ -4,7 +4,7 @@ import { state } from "../../../core/store.js";
 import { esc, shortDate } from "../../../utils/format.js";
 import { money } from "../../../domain/payroll.js";
 import { clientStatus, clientPhone, usedSessions, suggestedStart, today, monthReport, PAY_MODES, importable, clientLedger,
-         filterClients, planNames, lastVisits, DEFAULT_FILTER, packages, packageById, packageValidity, accountsToAdd, accountsMonths, payMonthsLoaded, endMonths, monthLabel, presets, LIST_GROUPS, memberMonths, membershipCount, pauseOf, pausedDays, birthdayIn, clientDob } from "../../../domain/clients.js";
+         filterClients, planNames, lastVisits, DEFAULT_FILTER, packages, packageById, packageValidity, accountsToAdd, accountsMonths, payMonthsLoaded, endMonths, monthLabel, presets, LIST_GROUPS, sheetRow, sheetPreview, sheetChanges, paySheetRows, memberMonths, membershipCount, pauseOf, pausedDays, birthdayIn, clientDob } from "../../../domain/clients.js";
 
 function opt(v, label, cur) { return '<option value="' + esc(v) + '"' + (v === cur ? " selected" : "") + ">" + esc(label) + "</option>"; }
 
@@ -129,6 +129,55 @@ function filterSheet(f, count) {
     '<div class="sheet-foot">' + (n ? '<button class="linkish" data-act="clf-clear">Clear all</button>' : "<span></span>") +
       '<button class="btn go" data-act="clf-toggle">Show ' + count + " client" + (count === 1 ? "" : "s") + "</button></div>" +
   "</div></div>";
+}
+
+/* Spreadsheet view of the (filtered) clients. White cells can be edited; grey ones are calculated. */
+var SHEET_PAGE = 50;
+function cell(c, r, f, type, w) {
+  return '<td class="e' + (r.dirty[f] ? " dirty" : "") + '"><input class="sh" id="sh_' + esc(c.id) + "_" + f + '" data-id="' + esc(c.id) + '" data-f="' + f + '" type="' + (type || "text") + '"' +
+    (f === "phone" ? ' inputmode="tel"' : "") + ' value="' + esc(r[f]) + '" style="width:' + w + 'px" aria-label="' + f + '" /></td>';
+}
+function sheetTable(shown, lv) {
+  var page = state.clSheetPage || 0, pages = Math.max(1, Math.ceil(shown.length / SHEET_PAGE));
+  if (page >= pages) page = pages - 1;
+  var rows = shown.slice(page * SHEET_PAGE, (page + 1) * SHEET_PAGE), n = sheetChanges();
+  var html = '<div class="sheet-wrap"><table class="gsheet"><thead><tr><th class="num">#</th><th class="stick">Name</th><th>Phone</th><th>Plan</th><th>Start</th><th>End</th>' +
+    '<th class="ro">Status</th><th class="ro">Days left</th><th class="ro">Member for</th><th class="ro">Last visit</th><th>Member since</th><th>Birthday</th><th>Notes</th></tr></thead><tbody>' +
+    rows.map(function (c, i) {
+      var r = sheetRow(c), pc = sheetPreview(c), st = clientStatus(pc);
+      var left = pc.plan && pc.plan.end ? Math.round((Date.parse(pc.plan.end) - Date.parse(today())) / 864e5) : "";
+      return "<tr" + (Object.keys(r.dirty).length ? ' class="changed"' : "") + '><td class="num">' + (page * SHEET_PAGE + i + 1) + "</td>" +
+        '<td class="e stick' + (r.dirty.name ? " dirty" : "") + '"><input class="sh" id="sh_' + esc(c.id) + '_name" data-id="' + esc(c.id) + '" data-f="name" type="text" value="' + esc(r.name) + '" style="width:150px" aria-label="name" /></td>' +
+        cell(c, r, "phone", "tel", 120) + cell(c, r, "plan", "text", 170) + cell(c, r, "start", "date", 130) + cell(c, r, "end", "date", 130) +
+        '<td class="ro">' + pill(st) + '</td><td class="ro n">' + (left === "" ? "—" : left) + '</td><td class="ro">' + esc(memberMonths(pc)) + ' mo</td><td class="ro">' + (lv[c.id] ? esc(shortDate(lv[c.id])) : "—") + "</td>" +
+        cell(c, r, "joined", "date", 130) + cell(c, r, "dob", "date", 130) + cell(c, r, "notes", "text", 220) + "</tr>";
+    }).join("") + "</tbody></table></div>";
+  if (!rows.length) html = '<div class="rows"><div class="empty">No client matches these filters.</div></div>';
+  if (pages > 1) html += '<div class="pager"><button class="btn quiet small" data-act="cl-sheet-page" data-v="' + (page - 1) + '"' + (page ? "" : " disabled") + ">‹ Previous</button><span>Rows " + (page * SHEET_PAGE + 1) + "–" + Math.min(shown.length, (page + 1) * SHEET_PAGE) + " of " + shown.length +
+    '</span><button class="btn quiet small" data-act="cl-sheet-page" data-v="' + (page + 1) + '"' + (page < pages - 1 ? "" : " disabled") + ">Next ›</button></div>";
+  html += '<p class="note">White cells can be edited: tap one, change it, then Save. Grey columns are worked out by the app from the dates (they update as you type). Payments are edited under Reports → Payments.</p>';
+  if (n) html += '<div class="submit-bar"><button class="btn go" data-act="cl-sheet-save">Save ' + n + " change" + (n === 1 ? "" : "s") + '</button><button class="btn quiet" data-act="cl-sheet-discard">Discard</button></div>';
+  return html;
+}
+
+/* Reports: one month's payments as an editable sheet. */
+function paySheet(ym) {
+  var rows = paySheetRows(ym), n = rows.filter(function (r) { return r.changed; }).length;
+  var total = rows.reduce(function (s, r) { return s + (r.del ? 0 : (parseFloat(r.amount) || 0)); }, 0);
+  if (!rows.length) return '<div class="rows"><div class="empty">No payments recorded this month.</div></div>';
+  var html = '<div class="sheet-wrap"><table class="gsheet"><thead><tr><th class="num">#</th><th class="stick">Client</th><th>Date</th><th>Amount (₹)</th><th>Paid by</th><th class="ro">Plan</th><th class="ro">Plan dates</th><th class="ro">Entered by</th><th>Delete</th></tr></thead><tbody>' +
+    rows.map(function (r, i) {
+      var p = r.p, id = esc(p.id);
+      return "<tr" + (r.del ? ' class="gone"' : r.changed ? ' class="changed"' : "") + '><td class="num">' + (i + 1) + '</td><td class="stick ro">' + esc(p.name) + "</td>" +
+        '<td class="e' + (r.dirty.date ? " dirty" : "") + '"><input class="shp" id="shp_' + id + '_date" data-id="' + id + '" data-f="date" type="date" value="' + esc(r.date) + '" style="width:130px" aria-label="date" /></td>' +
+        '<td class="e' + (r.dirty.amount ? " dirty" : "") + '"><input class="shp n" id="shp_' + id + '_amount" data-id="' + id + '" data-f="amount" type="number" inputmode="decimal" min="1" value="' + esc(r.amount) + '" style="width:100px" aria-label="amount" /></td>' +
+        '<td class="e' + (r.dirty.mode ? " dirty" : "") + '"><select class="shp" id="shp_' + id + '_mode" data-id="' + id + '" data-f="mode" aria-label="paid by">' + PAY_MODES.map(function (m) { return opt(m, m, r.mode); }).join("") + "</select></td>" +
+        '<td class="ro">' + esc(p.plan || "") + '</td><td class="ro">' + esc(p.start ? shortDate(p.start) + (p.end ? " – " + shortDate(p.end) : "") : "—") + '</td><td class="ro">' + esc(p.by || "") + "</td>" +
+        '<td class="e c"><input class="shp" id="shp_' + id + '_del" data-id="' + id + '" data-f="del" type="checkbox"' + (r.del ? " checked" : "") + ' aria-label="delete this payment" /></td></tr>';
+    }).join("") + '</tbody><tfoot><tr><td></td><td class="stick ro"><b>Total</b></td><td></td><td class="ro n"><b>' + money(total) + "</b></td><td colspan=\"5\"></td></tr></tfoot></table></div>";
+  html += '<p class="note">Change a date, amount or how it was paid, or tick Delete, then Save. Changing a date to another month moves the payment to that month.</p>';
+  if (n) html += '<div class="submit-bar"><button class="btn go" data-act="cl-pay-save">Save ' + n + " change" + (n === 1 ? "" : "s") + '</button><button class="btn quiet" data-act="cl-pay-discard">Discard</button></div>';
+  return html;
 }
 
 function tenureText(c) {
@@ -428,9 +477,13 @@ export function tabClients() {
     var f = Object.assign({}, DEFAULT_FILTER, state.clFilter), shown = filterClients(f, state.clSearch), lv = lastVisits();
     html += filterBar(f) + filterSheet(f, shown.length);
     html += '<div class="list-head"><h2>' + shown.length + " of " + all.length + " client" + (all.length === 1 ? "" : "s") + "</h2>" +
-      '<span class="list-tools"><label class="sort-mini"><span>Sort</span><select id="clf_sort" aria-label="Sort by">' + SORTS.map(function (x) { return opt(x[0], x[1], f.sort); }).join("") + "</select></label>" +
-      (shown.length ? '<button class="btn quiet small" data-act="clf-export">' + icons.download + "Excel</button>" : "") + "</span></div>" +
-      '<div class="rows">' +
+      '<span class="list-tools"><span class="view-toggle" role="tablist" aria-label="View">' +
+        '<button class="' + (state.clView === "sheet" ? "" : "on") + '" data-act="cl-view" data-v="list" role="tab">List</button>' +
+        '<button class="' + (state.clView === "sheet" ? "on" : "") + '" data-act="cl-view" data-v="sheet" role="tab">Sheet</button></span>' +
+        '<label class="sort-mini"><span>Sort</span><select id="clf_sort" aria-label="Sort by">' + SORTS.map(function (x) { return opt(x[0], x[1], f.sort); }).join("") + "</select></label>" +
+      (shown.length ? '<button class="btn quiet small" data-act="clf-export">' + icons.download + "Excel</button>" : "") + "</span></div>";
+    if (state.clView === "sheet") return html + sheetTable(shown, lv) + msg();
+    html += '<div class="rows">' +
       (shown.slice(0, 300).map(function (x) {
         return clientRow(x, waBtn(x) + '<button class="btn quiet small" data-act="cl-edit" data-id="' + esc(x.id) + '">Open</button>',
           (lv[x.id] ? "Last visit " + shortDate(lv[x.id]) : "No visits marked") + " · " + tenureText(x));
@@ -473,7 +526,11 @@ export function tabClients() {
   html += "<h2>Visits per client</h2>" + '<div class="rows">' + (on.length ? on.slice().sort(function (a, b) { return (r.visits[b.id] || 0) - (r.visits[a.id] || 0); }).map(function (x) {
     return '<div class="row"><span class="person-cell">' + avatar(x.name) + '<span class="who">' + esc(x.name) + '</span></span><span class="dur">' + (r.visits[x.id] || 0) + "</span></div>";
   }).join("") : '<div class="empty">No clients.</div>') + "</div>";
-  html += "<h2>Payments</h2>" + '<div class="rows">' + (r.payments.length ? r.payments.map(function (p) {
+  html += '<div class="list-head"><h2>Payments</h2><span class="list-tools"><span class="view-toggle" role="tablist" aria-label="Payments view">' +
+    '<button class="' + (state.clPayView === "sheet" ? "" : "on") + '" data-act="cl-payview" data-v="list" role="tab">List</button>' +
+    '<button class="' + (state.clPayView === "sheet" ? "on" : "") + '" data-act="cl-payview" data-v="sheet" role="tab">Edit sheet</button></span></span></div>';
+  if (state.clPayView === "sheet") html += paySheet(ym);
+  else html += '<div class="rows">' + (r.payments.length ? r.payments.map(function (p) {
     return '<div class="row"><span><span class="who">' + esc(p.name) + '</span><br><span class="meta">' + shortDate(p.date) + " · " + esc(p.plan) + " · " + esc(p.mode) + '</span></span><span class="dur">' + money(p.amount) + "</span></div>";
   }).join("") : '<div class="empty">No payments recorded this month.</div>') + "</div>";
   html += '<div class="btnrow"><button class="btn go" data-act="cl-xlsx">' + icons.download + "This month</button>" +

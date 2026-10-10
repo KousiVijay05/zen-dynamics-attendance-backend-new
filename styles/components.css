@@ -383,3 +383,5 @@ details.sess[open] > summary { background: var(--panel-2); }
 .quick .chip-btn { flex: none; white-space: nowrap; }
 .quick .chip-btn b { margin-left: 4px; font-weight: 700; color: var(--ink); }
 .quick .chip-btn.on { background: var(--gold-soft); border-color: var(--gold); }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.grid2 .field { margin-top: 0; min-width: 0; }

@@ -4,7 +4,7 @@ import { state } from "../../../core/store.js";
 import { esc, shortDate } from "../../../utils/format.js";
 import { money } from "../../../domain/payroll.js";
 import { clientStatus, clientPhone, usedSessions, suggestedStart, today, monthReport, PAY_MODES, importable, clientLedger,
-         filterClients, planNames, lastVisits, DEFAULT_FILTER, packages, packageById, packageValidity, accountsToAdd, accountsMonths, payMonthsLoaded, endMonths, monthLabel, presets, memberMonths, membershipCount } from "../../../domain/clients.js";
+         filterClients, planNames, lastVisits, DEFAULT_FILTER, packages, packageById, packageValidity, accountsToAdd, accountsMonths, payMonthsLoaded, endMonths, monthLabel, presets, memberMonths, membershipCount, pauseOf, pausedDays, birthdayIn, clientDob } from "../../../domain/clients.js";
 
 function opt(v, label, cur) { return '<option value="' + esc(v) + '"' + (v === cur ? " selected" : "") + ">" + esc(label) + "</option>"; }
 
@@ -21,7 +21,7 @@ function filterBar(f) {
     '<div class="field"><input id="cl_search" type="search" autocomplete="off" placeholder="Search name or phone…" value="' + esc(state.clSearch || "") + '" /></div>' +
     '<div class="filter-grid">' +
       '<label>Status<select id="clf_status">' + opt("all", "All (not turned off)", f.status) + opt("current", "Active + ending soon", f.status) + opt("active", "Active", f.status) + opt("soon", "Ending soon", f.status) +
-        opt("expired", "Expired", f.status) + opt("future", "Starts later", f.status) + opt("none", "No plan", f.status) + opt("off", "Turned off", f.status) + "</select></label>" +
+        opt("expired", "Expired", f.status) + opt("paused", "Paused", f.status) + opt("future", "Starts later", f.status) + opt("none", "No plan", f.status) + opt("off", "Turned off", f.status) + "</select></label>" +
       '<label>Plan dates<select id="clf_window">' + opt("", "Any", f.window) + opt("ends:7", "Ends within 7 days", f.window) + opt("ends:15", "Ends within 15 days", f.window) +
         opt("ends:30", "Ends within 30 days", f.window) + opt("expired:30", "Expired in last 30 days", f.window) + opt("expired:90", "Expired in last 90 days", f.window) +
         opt("expiredbefore:30", "Expired over 30 days ago", f.window) + opt("expiredbefore:90", "Expired over 90 days ago", f.window) + "</select></label>" +
@@ -38,11 +38,13 @@ function filterBar(f) {
         opt("90", "Last 90 days", f.joined) + opt("year", "This year", f.joined) + opt("before", "Before this year", f.joined) + "</select></label>" +
       '<label>Renewals<select id="clf_renewed">' + opt("", "Any", f.renewed) + opt("first", "First membership", f.renewed) + opt("renewed", "Renewed at least once", f.renewed) +
         opt("3", "3 or more memberships", f.renewed) + "</select></label>" +
+      '<label>Birthday<select id="clf_bday">' + opt("", "Any", f.bday) + opt("today", "Today", f.bday) + opt("7", "In the next 7 days", f.bday) +
+        opt("month", "This month", f.bday) + opt("next", "Next month", f.bday) + opt("none", "Not recorded", f.bday) + "</select></label>" +
       '<label>Paid<select id="clf_paid">' + opt("", "Any", f.paid) + opt("this", "Paid this month", f.paid) + opt("last", "Paid last month", f.paid) +
         opt("notthis", "Not paid this month", f.paid) + opt("lastnotthis", "Paid last month, not this month", f.paid) + "</select></label>" +
       '<label>Balance<select id="clf_balance">' + opt("", "Any", f.balance) + opt("due", "Has balance due", f.balance) + "</select></label>" +
       '<label>Sort by<select id="clf_sort">' + opt("name", "Name", f.sort) + opt("end", "Ending soonest", f.sort) + opt("endlast", "Ended most recently", f.sort) +
-        opt("seen", "Longest since last visit", f.sort) + opt("since", "Member since (oldest)", f.sort) + opt("newest", "Newest joiners", f.sort) + opt("tenure", "Longest membership", f.sort) + "</select></label>" +
+        opt("seen", "Longest since last visit", f.sort) + opt("since", "Member since (oldest)", f.sort) + opt("newest", "Newest joiners", f.sort) + opt("tenure", "Longest membership", f.sort) + opt("bday", "Next birthday", f.sort) + "</select></label>" +
     "</div>" +
     (f.paid && !payMonthsLoaded() ? '<div class="loading">Loading payments…</div>' : "") +
     (active ? '<div style="text-align:right"><button class="linkish" data-act="clf-clear">Clear ' + active + " filter" + (active === 1 ? "" : "s") + "</button></div>" : "") +
@@ -52,7 +54,31 @@ function filterBar(f) {
 function tenureText(c) {
   var m = memberMonths(c), n = membershipCount(c);
   var t = m < 1 ? "under 1 month" : m < 12 ? m + " month" + (m === 1 ? "" : "s") : Math.floor(m / 12) + " yr" + (m % 12 ? " " + (m % 12) + " mo" : "");
-  return "Member " + t + (n > 1 ? " · " + n + " memberships" : "");
+  return "Member " + t + (n > 1 ? " · " + n + " memberships" : "") + bdayText(c);
+}
+
+function bdayText(c) {
+  var b = birthdayIn(c);
+  return b === null || b > 7 ? "" : b === 0 ? " · 🎂 Birthday today" : " · 🎂 Birthday in " + b + " day" + (b === 1 ? "" : "s");
+}
+
+/* Pause / end-pause card on a client's page. */
+function pauseCard(c, st) {
+  var p = c.plan;
+  if (!p || !p.end || st.kind === "expired" || st.kind === "off") return "";
+  var z = pauseOf(c), total = pausedDays(p);
+  var html = "<h2>Pause membership</h2>" + '<div class="card">';
+  if (z) {
+    html += '<p class="note" style="margin-top:0"><b>' + (z.now ? "Paused now" : "Pause booked") + ":</b> " + esc(fullDate(z.from)) + " → " + esc(fullDate(z.to)) + " (" + z.days + " day" + (z.days === 1 ? "" : "s") + "). Plan ends " + esc(fullDate(p.end)) + ".</p>" +
+      '<div class="btnrow"><button class="btn go" data-act="cl-unpause" data-id="' + esc(c.id) + '">' + (z.now ? "End pause today" : "Cancel pause") + "</button></div>" +
+      '<p class="note">' + (z.now ? "Unused pause days come off the end date." : "The end date goes back to what it was.") + "</p>";
+  } else {
+    html += '<div class="grid2"><div class="field"><label for="cp_from">Pause from</label><input id="cp_from" type="date" value="' + esc(p.start > today() ? p.start : today()) + '" /></div>' +
+      '<div class="field"><label for="cp_days">Days</label><input id="cp_days" type="number" inputmode="numeric" min="1" max="180" placeholder="e.g. 10" /></div></div>' +
+      '<div class="btnrow"><button class="btn go" data-act="cl-pause" data-id="' + esc(c.id) + '">Pause</button></div>' +
+      '<p class="note">The end date moves out by the same number of days' + (total ? " · already paused " + total + " day" + (total === 1 ? "" : "s") + " on this plan" : "") + ".</p>";
+  }
+  return html + "</div>";
 }
 
 function fullDate(k) { return k ? shortDate(k) + " " + k.slice(0, 4) : "—"; }
@@ -71,7 +97,7 @@ function ledger(c) {
     var dates = fullDate(pl.start) + " → " + (pl.end ? fullDate(pl.end) : "no end date");
     var sess = pl.type === "pack" ? " · " + (pl.current ? (pl.usedNow || 0) : (pl.used || 0)) + " of " + pl.sessions + " sessions used" : "";
     return '<div class="row ledger-row"><span><span class="who">' + esc(pl.name) + "</span>" + tag +
-      '<br><span class="meta">' + esc(dates + sess) + "</span>" +
+      '<br><span class="meta">' + esc(dates + sess + (pausedDays(pl) ? " · paused " + pausedDays(pl) + " days" : "")) + "</span>" +
       (pl.payments.length ? pl.payments.map(function (p) {
         return '<br><span class="pay-line">' + esc(fullDate(p.date)) + " · " + esc(p.mode) + "</span>";
       }).join("") : '<br><span class="pay-line none">No payment recorded</span>') +
@@ -182,7 +208,7 @@ import { icons, avatar } from "../../components/icons.js";
 var SUBS = ["renew:Renewals", "all:Clients", "add:Add", "report:Reports"];
 
 function pill(st) {
-  var cls = st.kind === "expired" || st.kind === "off" ? "" : st.kind === "soon" || st.kind === "future" || st.kind === "none" ? "pending" : "on";
+  var cls = st.kind === "expired" || st.kind === "off" ? "" : st.kind === "soon" || st.kind === "future" || st.kind === "none" || st.kind === "paused" ? "pending" : "on";
   return '<span class="tag ' + cls + '">' + esc(st.short) + "</span>";
 }
 
@@ -257,6 +283,7 @@ function detail(c) {
       '<br><span class="meta">' + esc(c.plan ? c.plan.name + " · from " + shortDate(c.plan.start) : "No plan") + " · " + esc(st.label) +
       (c.plan && c.plan.type === "pack" ? " · used " + usedSessions(c) + " of " + c.plan.sessions : "") + "</span></span></div>" +
       (clientPhone(c.id) ? '<div class="btnrow"><button class="btn wa wide" data-act="cl-wa" data-id="' + esc(c.id) + '">' + icons.whatsapp + "Send renewal reminder</button></div>" : "") +
+      (clientPhone(c.id) && birthdayIn(c) !== null && birthdayIn(c) <= 7 ? '<div class="btnrow"><button class="btn wa wide" data-act="cl-bday" data-id="' + esc(c.id) + '">' + icons.whatsapp + "Send birthday wish" + (birthdayIn(c) === 0 ? " (today)" : "") + "</button></div>" : "") +
       (priv.notes ? '<p class="note" style="margin-top:10px">' + esc(priv.notes) + "</p>" : "") +
     "</div>" + ledger(c);
 
@@ -264,9 +291,12 @@ function detail(c) {
   html += "<h2>Renew / new plan</h2>" + '<div class="card">' + planFields("cr", type, suggestedStart(c), curPkg) +
     '<div class="btnrow"><button class="btn go wide" data-act="cl-renew" data-id="' + esc(c.id) + '">Save renewal</button></div></div>';
 
+  html += pauseCard(c, st);
+
   html += "<h2>Details</h2>" + '<div class="card">' +
     '<div class="field"><label for="ce_name">Name</label><input id="ce_name" type="text" value="' + esc(c.name) + '" /></div>' +
     '<div class="field"><label for="ce_phone">Phone (WhatsApp)</label><input id="ce_phone" type="tel" inputmode="tel" value="' + esc(priv.phone || "") + '" placeholder="10-digit mobile" /></div>' +
+    '<div class="field"><label for="ce_dob">Birthday (optional)</label><input id="ce_dob" type="date" value="' + esc(clientDob(c.id)) + '" /></div>' +
     '<div class="field"><label for="ce_notes">Notes</label><textarea id="ce_notes" rows="3" placeholder="Goals, injuries, preferred batch…">' + esc(priv.notes || "") + "</textarea></div>" +
     '<div class="btnrow"><button class="btn go" data-act="cl-save" data-id="' + esc(c.id) + '">Save details</button>' +
     '<button class="btn quiet" data-act="cl-toggle" data-id="' + esc(c.id) + '">' + (c.active === false ? "Restore client" : "Turn off") + "</button></div></div>";
@@ -334,6 +364,7 @@ export function tabClients() {
       '<div class="field"><label for="ca_name">Name</label><input id="ca_name" type="text" placeholder="Full name" /></div>' +
       '<div class="field"><label for="ca_phone">Phone (WhatsApp)</label><input id="ca_phone" type="tel" inputmode="tel" placeholder="10-digit mobile" /></div>' +
       planFields("ca", type, today(), state.clAddPkg || (packages()[0] || {}).id || "custom") +
+      '<div class="field"><label for="ca_dob">Birthday (optional)</label><input id="ca_dob" type="date" /></div>' +
       '<div class="field"><label for="ca_notes">Notes (optional)</label><textarea id="ca_notes" rows="2" placeholder="Goals, injuries, preferred batch…"></textarea></div>' +
       '<div class="btnrow"><button class="btn go wide" data-act="cl-add">Add client</button></div></div>';
     html += importCard();

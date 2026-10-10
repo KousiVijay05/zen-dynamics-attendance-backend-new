@@ -974,3 +974,21 @@ join date, membership length, renewal history).
 - **Sort by** gains Newest joiners and Longest membership.
 - Each row shows "Member 8 months · 3 memberships". The Excel export
   gains the columns Months as member and Memberships.
+
+## 2026-10-10 — Birthdays and pausing a membership (v36)
+
+- **Birthday** (optional) on Add client and on the client's page. It is
+  stored in the admin-only record (`cl:private`), so coaches can't read it.
+  - Filter: today, next 7 days, this month, next month, not recorded.
+  - Sort by next birthday. Quick list "Birthdays this week".
+  - Rows show "🎂 Birthday in 3 days". The client page has a **Send
+    birthday wish** button that opens WhatsApp with the message ready.
+    Nothing is sent automatically.
+- **Pause membership** on the client's page: pick a start day and a number
+  of days (1–180). The plan's end date moves out by the same number.
+  - The client shows as **Paused** (Status filter and a "Paused" quick list).
+  - **End pause today** gives unused days back. A pause booked for later
+    can be cancelled, which restores the end date.
+  - Pauses are kept on the plan and shown in the membership history.
+  - A paused monthly plan still counts as Monthly in the Membership filter.
+- Excel export gains a Birthday column.

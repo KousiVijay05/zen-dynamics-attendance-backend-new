@@ -33,7 +33,7 @@ import { exportExcel } from "../domain/excel.js";
 import { requestLeave, cancelLeave, decideLeave, allLeaves } from "../domain/leave.js";
 import {
   addClient, updateClient, renewClient, setClientActive, reminderText, waLinkTo, clientPhone,
-  startSession, discardSession, togglePick, submitSession, voidMark, markToday, canVoid, filterClients, exportFiltered, DEFAULT_FILTER, loadPayMonths, presets,
+  startSession, discardSession, togglePick, submitSession, voidMark, markToday, canVoid, filterClients, exportFiltered, DEFAULT_FILTER, loadPayMonths, presets, pauseClient, endPause, birthdayText,
   loadMonth, exportClientsExcel, today as clToday, downloadTemplate, readImportFile, importClients,
   loadAllPayments, exportFullHistory, importAccounts
 } from "../domain/clients.js";
@@ -71,7 +71,7 @@ export function initEvents() {
     if (ev.target.id === "ca_type") { state.clAddType = ev.target.value; emitChange(); }
     if (ev.target.id === "ca_pkg") { state.clAddPkg = ev.target.value; emitChange(); }
     if (ev.target.id === "cr_pkg") { state.clRenewPkg = ev.target.value; emitChange(); }
-    var fm = /^clf_(status|window|endym|seen|plan|length|tenure|joined|renewed|paid|balance|sort)$/.exec(ev.target.id);
+    var fm = /^clf_(status|window|endym|seen|plan|length|tenure|joined|renewed|bday|paid|balance|sort)$/.exec(ev.target.id);
     if (fm) {
       state.clFilter = Object.assign({}, state.clFilter); state.clFilter[fm[1]] = ev.target.value; emitChange();
       if (fm[1] === "paid" && ev.target.value) loadPayMonths().catch(function (e) { state.msg = e.message; state.msgOk = false; emitChange(); });
@@ -430,9 +430,9 @@ tasks: selectedTasks
     if (act === "cl-closeedit") { state.clEdit = null; state.clSub = "all"; state.msg = ""; emitChange(); return; }
     if (act === "cl-add") {
       try {
-        var nf = Object.assign({ pkg: $("ca_pkg") ? $("ca_pkg").value : "custom", type: ($("ca_type") || {}).value, months: ($("ca_months") || {}).value, sessions: ($("ca_sessions") || {}).value, usedBefore: ($("ca_used") || {}).value, start: $("ca_start").value, amount: $("ca_amount").value, mode: $("ca_mode").value }, { name: $("ca_name").value, phone: $("ca_phone").value, notes: $("ca_notes").value });
+        var nf = Object.assign({ pkg: $("ca_pkg") ? $("ca_pkg").value : "custom", type: ($("ca_type") || {}).value, months: ($("ca_months") || {}).value, sessions: ($("ca_sessions") || {}).value, usedBefore: ($("ca_used") || {}).value, start: $("ca_start").value, amount: $("ca_amount").value, mode: $("ca_mode").value }, { name: $("ca_name").value, phone: $("ca_phone").value, notes: $("ca_notes").value, dob: ($("ca_dob") || {}).value });
         addClient(nf).then(function (msg) {
-          clearFields(["ca_name", "ca_phone", "ca_notes", "ca_months", "ca_sessions", "ca_used", "ca_amount"]);
+          clearFields(["ca_name", "ca_phone", "ca_notes", "ca_dob", "ca_months", "ca_sessions", "ca_used", "ca_amount"]);
           sayAndPaint(msg, true);
         }).catch(function (err) { say(err.message); });
       } catch (err) { say(err.message); }
@@ -449,7 +449,7 @@ tasks: selectedTasks
     }
     if (act === "cl-save") {
       try {
-        updateClient(id, { name: $("ce_name").value, phone: $("ce_phone").value, notes: $("ce_notes").value })
+        updateClient(id, { name: $("ce_name").value, phone: $("ce_phone").value, notes: $("ce_notes").value, dob: ($("ce_dob") || {}).value })
           .then(function (msg) { sayAndPaint(msg, true); }).catch(function (err) { say(err.message); });
       } catch (err) { say(err.message); }
       return;
@@ -459,6 +459,24 @@ tasks: selectedTasks
       if (!cc) return;
       if (cc.active !== false && !wConfirm("Turn off " + cc.name + "? They'll be hidden from the attendance list (history is kept).")) return;
       setClientActive(id, cc.active === false).then(function (msg) { sayAndPaint(msg, true); }).catch(function (err) { say(err.message); });
+      return;
+    }
+    if (act === "cl-pause") {
+      try {
+        pauseClient(id, { from: $("cp_from").value, days: $("cp_days").value }).then(function (msg) { clearFields(["cp_days"]); sayAndPaint(msg, true); }).catch(function (err) { say(err.message); });
+      } catch (err) { say(err.message); }
+      return;
+    }
+    if (act === "cl-unpause") {
+      try { endPause(id).then(function (msg) { sayAndPaint(msg, true); }).catch(function (err) { say(err.message); }); } catch (err) { say(err.message); }
+      return;
+    }
+    if (act === "cl-bday") {
+      var bc = state.clients.filter(function (x) { return x.id === id; })[0];
+      if (!bc || !clientPhone(id)) { say("Add this client's phone number first."); return; }
+      var bl = waLinkTo(clientPhone(id), birthdayText(bc));
+      var bw = window.open(bl, "_blank");
+      if (bw) { try { bw.opener = null; } catch (e) {} } else window.location.href = bl;
       return;
     }
     if (act === "cl-wa") {

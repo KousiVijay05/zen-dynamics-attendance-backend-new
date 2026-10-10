@@ -22,7 +22,7 @@ function who(id, name) {
   return p ? p.name.split(" ")[0] : "a coach";
 }
 function pill(st) {
-  return '<span class="tag ' + (st.kind === "expired" ? "" : st.kind === "soon" || st.kind === "future" || st.kind === "none" ? "pending" : "on") + '">' + esc(st.short) + "</span>";
+  return '<span class="tag ' + (st.kind === "expired" ? "" : st.kind === "soon" || st.kind === "future" || st.kind === "none" || st.kind === "paused" ? "pending" : "on") + '">' + esc(st.short) + "</span>";
 }
 
 /* Taking a session: search, tick, submit. */

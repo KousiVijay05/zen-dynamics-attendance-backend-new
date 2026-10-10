@@ -199,6 +199,8 @@ export function clientStatus(c) {
   var p = c.plan, t = today();
   if (!p) return { kind: "none", label: "No plan yet", short: "No plan" };
   if (p.start > t) return { kind: "future", label: "Starts " + dateLabel(p.start), short: "Starts " + dateLabel(p.start) };
+  var pz = pauseOf(c);
+  if (pz && pz.now && !(p.end && p.end < t)) return { kind: "paused", label: "Paused till " + dateLabel(pz.to) + " · plan ends " + dateLabel(p.end), short: "Paused", pause: pz };
   var daysLeft = p.end ? daysBetween(t, p.end) : null;
   if (p.type === "pack") {
     var left = p.sessions - usedSessions(c);
@@ -213,6 +215,19 @@ export function clientStatus(c) {
   if (daysLeft <= 7) return { kind: "soon", label: lab, short: daysLeft === 0 ? "Ends today" : daysLeft + "d left", daysLeft: daysLeft };
   return { kind: "active", label: "Till " + dateLabel(p.end), short: "Till " + dateLabel(p.end), daysLeft: daysLeft };
 }
+
+/** The pause that is running or still to come on the current plan: { i, from, to, days, now }. */
+export function pauseOf(c) {
+  var t = today(), list = (c.plan && c.plan.pauses) || [], out = null;
+  list.forEach(function (z, i) {
+    var to = addDays(z.from, z.days - 1);
+    if (to >= t && (!out || z.from < out.from)) out = { i: i, from: z.from, to: to, days: z.days, now: z.from <= t };
+  });
+  return out;
+}
+
+/** Total days the current plan has been paused. */
+export function pausedDays(p) { return ((p && p.pauses) || []).reduce(function (s, z) { return s + z.days; }, 0); }
 
 /* ---------- marks + sessions (coaches and admins) ---------- */
 
@@ -329,7 +344,7 @@ export function sessionsOn(k) {
 
 /* ---------- finding clients ---------- */
 
-export var DEFAULT_FILTER = { status: "all", window: "", endym: "", seen: "", plan: "", length: "", tenure: "", joined: "", renewed: "", paid: "", balance: "", sort: "name" };
+export var DEFAULT_FILTER = { status: "all", window: "", endym: "", seen: "", plan: "", length: "", tenure: "", joined: "", renewed: "", bday: "", paid: "", balance: "", sort: "name" };
 
 var MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 export function monthLabel(ym) { return MON[+ym.slice(5, 7) - 1] + " " + ym.slice(0, 4); }
@@ -373,6 +388,32 @@ export function endMonths() {
   return Object.keys(m).sort().reverse().map(function (ym) { return { ym: ym, n: m[ym] }; });
 }
 
+export function clientDob(id) { return ((state.clientPriv || {})[id] || {}).dob || ""; }
+
+function cleanDob(v) {
+  v = String(v || "").trim();
+  if (!v) return "";
+  if (!validDate(v) || v > today() || v < "1920-01-01") throw new Error("That birthday doesn't look right.");
+  return v;
+}
+
+/** Days until the client's next birthday (0 = today), or null if not recorded. */
+export function birthdayIn(c) {
+  var dob = clientDob(c.id);
+  if (!dob) return null;
+  var t = today(), y = +t.slice(0, 4), md = dob.slice(5);
+  var next = function (yr) { var k = yr + "-" + md; return validDate(k) ? k : yr + "-02-28"; };   // 29 Feb
+  var k = next(y);
+  if (k < t) k = next(y + 1);
+  return daysBetween(t, k);
+}
+
+export function birthdayText(c) {
+  var org = (state.cfg && state.cfg.org) || "the gym", n = birthdayIn(c);
+  return "Happy Birthday, " + c.name.split(" ")[0] + "! 🎉🎂\n\nWishing you a strong, healthy and happy year ahead" + (n === 0 ? "" : " (a little early!)") +
+    ".\n\n— Team " + org + " 💪";
+}
+
 /** Ready-made lists (what most gym apps call smart lists). */
 export function presets() {
   var cur = today().slice(0, 7);
@@ -383,7 +424,9 @@ export function presets() {
     { id: "lost", label: "Lost (expired 30+ days)", f: { window: "expiredbefore:30", sort: "endlast" } },
     { id: "dormant", label: "Active, not seen 14 days", f: { status: "current", seen: "14", sort: "seen" } },
     { id: "loyal", label: "1 year+ members", f: { tenure: "12", sort: "tenure" } },
-    { id: "first", label: "First membership", f: { status: "current", renewed: "first" } }
+    { id: "first", label: "First membership", f: { status: "current", renewed: "first" } },
+    { id: "bday", label: "Birthdays this week", f: { bday: "7", sort: "bday" } },
+    { id: "paused", label: "Paused", f: { status: "paused" } }
   ].map(function (p) { p.f = Object.assign({}, DEFAULT_FILTER, p.f); p.n = filterClients(p.f, "").length; return p; });
 }
 
@@ -416,7 +459,7 @@ export function planLength(p) {
   if (!p) return "";
   if (p.type === "pack") return "pack";
   if (!p.start || !p.end) return "";
-  var days = (Date.parse(p.end) - Date.parse(p.start)) / DAY + 1;
+  var days = (Date.parse(p.end) - Date.parse(p.start)) / DAY + 1 - pausedDays(p);
   return days <= 50 ? "1" : days <= 125 ? "3" : days <= 245 ? "6" : "12";   // 6M/12M packages carry a bonus month
 }
 
@@ -452,6 +495,14 @@ export function filterClients(f, q) {
       if (f.joined === "year" && j.slice(0, 4) !== t.slice(0, 4)) return false;
       if (f.joined === "before" && !(j && j.slice(0, 4) < t.slice(0, 4))) return false;
     }
+    if (f.bday) {
+      var bd = birthdayIn(c), dob = clientDob(c.id);
+      if (f.bday === "none" ? !!dob : bd === null) return false;
+      if (f.bday === "today" && bd !== 0) return false;
+      if (f.bday === "7" && bd > 7) return false;
+      if (f.bday === "month" && dob.slice(5, 7) !== t.slice(5, 7)) return false;
+      if (f.bday === "next" && +dob.slice(5, 7) !== (+t.slice(5, 7) % 12) + 1) return false;
+    }
     if (f.renewed) {
       var mc = membershipCount(c);
       if (f.renewed === "first" ? mc !== 1 : f.renewed === "renewed" ? mc < 2 : mc < 3) return false;
@@ -486,7 +537,8 @@ export function filterClients(f, q) {
     seen: function (a, b) { return (lv[a.id] || "0000") < (lv[b.id] || "0000") ? -1 : 1; },
     since: function (a, b) { return (a.joined || "") < (b.joined || "") ? -1 : 1; },
     newest: function (a, b) { return (a.joined || "") > (b.joined || "") ? -1 : 1; },
-    tenure: function (a, b) { return memberMonths(b) - memberMonths(a); }
+    tenure: function (a, b) { return memberMonths(b) - memberMonths(a); },
+    bday: function (a, b) { var x = birthdayIn(a), y = birthdayIn(b); return (x === null ? 999 : x) - (y === null ? 999 : y); }
   };
   return list.sort(by[f.sort] || by.name);
 }
@@ -502,10 +554,10 @@ export function planNames() {
 export function exportFiltered(list) {
   if (typeof XLSX === "undefined") throw new Error("Excel library didn't load. Check the connection and reload.");
   var lv = lastVisits(), priv = state.clientPriv || {};
-  var rows = [["Client", "Phone", "Status", "Plan", "Start", "End", "Last visit", "Member since", "Months as member", "Memberships", "Notes"]];
+  var rows = [["Client", "Phone", "Status", "Plan", "Start", "End", "Last visit", "Member since", "Months as member", "Memberships", "Birthday", "Notes"]];
   list.forEach(function (c) {
     var p = c.plan || {};
-    rows.push([c.name, (priv[c.id] || {}).phone || "", clientStatus(c).label, p.name || "", p.start || "", p.end || "", lv[c.id] || "", c.joined || "", memberMonths(c), membershipCount(c), (priv[c.id] || {}).notes || ""]);
+    rows.push([c.name, (priv[c.id] || {}).phone || "", clientStatus(c).label, p.name || "", p.start || "", p.end || "", lv[c.id] || "", c.joined || "", memberMonths(c), membershipCount(c), (priv[c.id] || {}).dob || "", (priv[c.id] || {}).notes || ""]);
   });
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "Clients");
@@ -557,12 +609,13 @@ export function addClient(f) {
   if (state.clients.some(function (c) { return c.name.toLowerCase() === name.toLowerCase() && c.active !== false; }) && !f.allowDuplicate) {
     throw new Error("A client called " + name + " already exists. Add a surname or initial to tell them apart.");
   }
-  var plan = makePlan(f);
+  var plan = makePlan(f), dob = cleanDob(f.dob);
   var c = { id: uid(), name: name, active: true, joined: today(), plan: plan };
   var pay = payRecord(c, plan, f);
   var roster = state.clients.concat([c]);
   var priv = Object.assign({}, state.clientPriv);
   priv[c.id] = { phone: phone, notes: (f.notes || "").trim().slice(0, 500), history: [] };
+  if (dob) priv[c.id].dob = dob;
   return save(roster, priv, pay).then(function () {
     state.clients = roster; state.clientPriv = priv; watchTicks(); emitChange();
     return name + " added" + (pay ? " · payment of " + pay.amount + " recorded." : ".");
@@ -574,10 +627,10 @@ export function updateClient(id, f) {
   if (!c) throw new Error("That client no longer exists.");
   var name = (f.name || "").trim();
   if (!name) throw new Error("Enter the client's name.");
-  var phone = cleanPhone(f.phone);
+  var phone = cleanPhone(f.phone), dob = cleanDob(f.dob);
   var roster = state.clients.map(function (x) { return x.id === id ? Object.assign({}, x, { name: name }) : x; });
   var priv = Object.assign({}, state.clientPriv);
-  priv[id] = Object.assign({ history: [] }, priv[id], { phone: phone, notes: (f.notes || "").trim().slice(0, 500) });
+  priv[id] = Object.assign({ history: [] }, priv[id], { phone: phone, notes: (f.notes || "").trim().slice(0, 500), dob: dob });
   return save(roster, priv, null).then(function () { state.clients = roster; state.clientPriv = priv; emitChange(); return "Saved."; });
 }
 
@@ -594,6 +647,44 @@ export function renewClient(id, f) {
   return save(roster, priv, pay).then(function () {
     state.clients = roster; state.clientPriv = priv; watchTicks(); emitChange();
     return "Renewed: " + plan.name + " from " + shortDate(plan.start) + (pay ? " · payment recorded." : ".");
+  });
+}
+
+/** Pause the current plan for `days` from `from`; the end date moves out by the same number of days. */
+export function pauseClient(id, f) {
+  var c = state.clients.filter(function (x) { return x.id === id; })[0];
+  if (!c || !c.plan) throw new Error("This client has no plan to pause.");
+  var p = c.plan, t = today(), from = String(f.from || "").trim(), days = Math.round(num(f.days, 0));
+  if (!p.end) throw new Error("This plan has no end date, so there's nothing to extend.");
+  if (p.end < t) throw new Error("This plan has already ended — renew it instead.");
+  if (!validDate(from)) throw new Error("Pick the day the pause starts.");
+  if (from < p.start || from > p.end) throw new Error("The pause must start within the plan (" + shortDate(p.start) + " – " + shortDate(p.end) + ").");
+  if (from < addDays(t, -31)) throw new Error("A pause can start at most a month back.");
+  if (days < 1 || days > 180) throw new Error("Pause days must be between 1 and 180.");
+  if (pauseOf(c)) throw new Error("There's already a pause on this plan — end it first.");
+  var to = addDays(from, days - 1);
+  if ((p.pauses || []).some(function (z) { return from <= addDays(z.from, z.days - 1) && to >= z.from; })) throw new Error("That overlaps an earlier pause.");
+  var plan = Object.assign({}, p, { end: addDays(p.end, days), pauses: (p.pauses || []).concat([{ from: from, days: days }]) });
+  var roster = state.clients.map(function (x) { return x.id === id ? Object.assign({}, x, { plan: plan }) : x; });
+  return save(roster, state.clientPriv, null).then(function () {
+    state.clients = roster; watchTicks(); emitChange();
+    return "Paused " + days + " day" + (days === 1 ? "" : "s") + " from " + shortDate(from) + " · plan now ends " + shortDate(plan.end) + ".";
+  });
+}
+
+/** End a running pause today (unused days come off the end date), or cancel one that hasn't started. */
+export function endPause(id) {
+  var c = state.clients.filter(function (x) { return x.id === id; })[0], z = c && pauseOf(c);
+  if (!z) throw new Error("There's no pause to end.");
+  var t = today(), back = z.now ? daysBetween(t, z.to) + 1 : z.days, keep = z.days - back;
+  var pauses = c.plan.pauses.slice();
+  if (keep > 0) pauses[z.i] = { from: z.from, days: keep }; else pauses.splice(z.i, 1);
+  var plan = Object.assign({}, c.plan, { end: addDays(c.plan.end, -back), pauses: pauses });
+  if (!pauses.length) delete plan.pauses;
+  var roster = state.clients.map(function (x) { return x.id === id ? Object.assign({}, x, { plan: plan }) : x; });
+  return save(roster, state.clientPriv, null).then(function () {
+    state.clients = roster; watchTicks(); emitChange();
+    return (z.now ? "Pause ended" : "Pause cancelled") + " · plan now ends " + shortDate(plan.end) + ".";
   });
 }
 

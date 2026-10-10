@@ -125,6 +125,41 @@ function periodReport(title, from, to) {
   return out.join("\n");
 }
 
+export var PERIODS = [["today", "Today"], ["yesterday", "Yesterday"], ["week", "This week"], ["lastweek", "Last week"], ["last7", "Last 7 days"],
+  ["month", "By month"], ["custom", "Custom dates"]];
+export var MAX_RANGE_DAYS = 92;
+
+/** The Records tab's chosen period as { from, to, title } ("yyyy-mm-dd", inclusive) or { error }. */
+export function recRange() {
+  var per = state.recPeriod || "month", t = dayKey(Date.now());
+  var mon = keyPlus(t, -((new Date(t + "T12:00:00").getDay() + 6) % 7));
+  if (per === "today") return { from: t, to: t, title: "Today" };
+  if (per === "yesterday") return { from: keyPlus(t, -1), to: keyPlus(t, -1), title: "Yesterday" };
+  if (per === "week") return { from: mon, to: t, title: "This week" };
+  if (per === "lastweek") return { from: keyPlus(mon, -7), to: keyPlus(mon, -1), title: "Last week" };
+  if (per === "last7") return { from: keyPlus(t, -6), to: t, title: "Last 7 days" };
+  if (per === "custom") {
+    var a = state.recFrom || "", b = state.recTo || "", ok = /^\d{4}-\d{2}-\d{2}$/;
+    if (!ok.test(a) || !ok.test(b)) return { error: "Pick both dates." };
+    if (a > b) return { error: "The first date must be on or before the second." };
+    if (Math.round((new Date(b + "T12:00:00") - new Date(a + "T12:00:00")) / DAY_MS) + 1 > MAX_RANGE_DAYS) return { error: "Pick at most " + MAX_RANGE_DAYS + " days — for longer, use By month." };
+    return { from: a, to: b, title: "Attendance report" };
+  }
+  var ym = state.month;
+  return { from: ym + "-01", to: ym + "-" + monthDays(ym), title: monthLabel(ym), month: ym };
+}
+
+export function rangeText(from, to) { return rangeLabel(from, to); }
+
+/** WhatsApp text for the Records tab's chosen period. */
+export function rangeReport() {
+  var r = recRange();
+  if (r.error) throw new Error(r.error);
+  if (r.from === r.to) return dailyReport(r.from);
+  if (r.month) return monthlyReport(r.month);
+  return periodReport(r.title === "Attendance report" ? r.title : r.title + " report", r.from, r.to);
+}
+
 /** The last 7 days, ending today. */
 export function weeklyReport() {
   var to = dayKey(Date.now());

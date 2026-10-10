@@ -4,15 +4,20 @@ import { state } from "../../../core/store.js";
 import { esc, hm, tClock, dayKey, dayLabel, monthLabel, minsOfDay, parseHM } from "../../../utils/format.js";
 import { monthOptions } from "../../components/monthOptions.js";
 import { icons } from "../../components/icons.js";
+import { recRange, rangeText, periodStats, PERIODS } from "../../../domain/reports.js";
 
 export function tabRecords() {
-  var ym = state.month, only = state.recPerson;
+  var ym = state.month, only = state.recPerson, per = state.recPeriod || "month", R = recRange();
 
   var html =
+    '<div class="pills scroll" role="tablist" aria-label="Period">' +
+      PERIODS.map(function (x) { return '<button class="pill' + (per === x[0] ? " on" : "") + '" data-act="rec-period" data-v="' + x[0] + '">' + x[1] + "</button>"; }).join("") +
+    "</div>" +
     '<div class="field pair">' +
-      '<div><label for="r_month">Month</label><select id="r_month">' +
-        monthOptions() +
-      '</select></div>' +
+      (per === "custom"
+        ? '<div><label for="r_from">From</label><input id="r_from" type="date" value="' + esc(state.recFrom || "") + '" /></div>' +
+          '<div><label for="r_to">To</label><input id="r_to" type="date" value="' + esc(state.recTo || "") + '" /></div></div><div class="field">'
+        : per === "month" ? '<div><label for="r_month">Month</label><select id="r_month">' + monthOptions() + '</select></div>' : "") +
 
       '<div><label for="r_person">Who</label><select id="r_person">' +
         '<option value="all" ' + (only === "all" ? "selected" : "") + '>Everyone</option>' +
@@ -25,27 +30,49 @@ export function tabRecords() {
       '</select></div>' +
     '</div>';
 
-  html += '<div class="btnrow">' +
-      '<button class="btn wa" data-act="wa-weekly">' + icons.whatsapp + 'Weekly</button>' +
-      '<button class="btn wa" data-act="wa-monthly">' + icons.whatsapp + esc(monthLabel(ym).split(" ")[0]) + ' report</button>' +
+  if (R.error) return html + '<div class="rows"><div class="empty">' + esc(R.error) + "</div></div>";
+  var rangeName = per === "month" ? monthLabel(ym) : (R.title === "Attendance report" ? "" : R.title + " · ") + rangeText(R.from, R.to);
+
+  html += '<div class="btnrow">' + (per === "month"
+      ? '<button class="btn wa" data-act="wa-weekly">' + icons.whatsapp + 'Weekly</button>' +
+        '<button class="btn wa" data-act="wa-monthly">' + icons.whatsapp + esc(monthLabel(ym).split(" ")[0]) + ' report</button>'
+      : '<button class="btn wa wide" data-act="wa-period">' + icons.whatsapp + "Share this report</button>") +
     '</div><p class="note">Opens WhatsApp with the report ready — pick your group and send.</p>';
+
+  /* Per-person totals for the period (same counting as the WhatsApp reports). */
+  var people = state.roster.filter(function (p) { return only === "all" ? p.active !== false : p.id === only; })
+    .sort(function (a, b) { return a.name.localeCompare(b.name); });
+  if (state.adminLoaded && people.length) {
+    html += '<div class="list-head"><h2>' + esc(rangeName) + '</h2></div><div class="rows rec-sum">' + people.map(function (p) {
+      var s = periodStats(p, R.from, R.to);
+      return '<div class="row"><span><span class="who">' + esc(p.name) + '</span><br><span class="meta">' +
+        s.days + " day" + (s.days === 1 ? "" : "s") + " present · late " + s.late + " · leave " + s.leave + " · absent " + s.absent +
+        '</span></span><span class="dur">' + hm(s.ms) + "</span></div>";
+    }).join("") + "</div>";
+  }
 
   var byDay = {}, days = [];
 
   state.roster.forEach(function (p) {
     if (only !== "all" && p.id !== only) return;
 
-    (state.logs["log:" + p.id + ":" + ym.replace("-", "")] || []).forEach(function (e) {
-      var k = dayKey(e.start);
+    Object.keys(state.logs).forEach(function (lk) {
+      if (lk.indexOf("log:" + p.id + ":") !== 0) return;
+      var lm = lk.slice(-6);
+      if (lm < R.from.slice(0, 7).replace("-", "") || lm > R.to.slice(0, 7).replace("-", "")) return;
+      (state.logs[lk] || []).forEach(function (e) {
+        var k = dayKey(e.start);
+        if (k < R.from || k > R.to) return;
 
-      if (!byDay[k]) {
-        byDay[k] = [];
-        days.push(k);
-      }
+        if (!byDay[k]) {
+          byDay[k] = [];
+          days.push(k);
+        }
 
-      byDay[k].push({
-        person: p,
-        entry: e
+        byDay[k].push({
+          person: p,
+          entry: e
+        });
       });
     });
   });
@@ -55,10 +82,10 @@ export function tabRecords() {
   if (!days.length) {
     return html +
       '<div class="rows">' +
-        '<div class="empty">No punches recorded in ' +
-        monthLabel(ym) +
+        '<div class="empty">No punches recorded ' + (per === "month" ? "in " + monthLabel(ym) : "for " + esc(rangeText(R.from, R.to))) +
         '.</div>' +
-      '</div>';
+      '</div>' +
+      '<p class="msg">' + (state.msg ? esc(state.msg) : "") + '</p>';
   }
 
   var shiftStart = parseHM(state.cfg.pay.shiftStart);
@@ -175,6 +202,7 @@ export function tabRecords() {
       '</span>' +
     '</div>' +
 
+    '<h2>Clock-ins and clock-outs</h2>' +
     '<div class="rows">' +
       body +
     '</div>' +

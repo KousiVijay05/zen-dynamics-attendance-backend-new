@@ -42,38 +42,58 @@ var BARE = { status: 1, length: 1, renewed: 1, endym: 1, window: 1, seen: 1, pai
 var SORTS = [["name", "Name"], ["end", "Ending soonest"], ["endlast", "Ended most recently"], ["seen", "Longest since last visit"], ["since", "Member since (oldest)"],
   ["newest", "Newest joiners"], ["tenure", "Longest membership"], ["bday", "Next birthday"]];
 
-/* Filters for the Clients list: quick lists, search, one Filters button, and what's applied as removable chips. */
-function filterBar(f) {
-  var spec = filterSpec(), applied = [];
+/* Long lists stay as a dropdown inside the sheet; everything else is tap-to-pick pills. */
+var AS_SELECT = { plan: 1, endym: 1 };
+
+function appliedFilters(f, spec) {
+  var out = [];
   spec.forEach(function (g) { g.items.forEach(function (it) {
     if (f[it.k] === DEFAULT_FILTER[it.k]) return;
     var o = it.opts.filter(function (x) { return x[0] === f[it.k]; })[0];
-    applied.push({ k: it.k, text: (BARE[it.k] ? "" : it.label + ": ") + (o ? o[1].replace(/ \(\d+\)$/, "").replace(/^This month · /, "Ends ") : f[it.k]) });
+    out.push({ k: it.k, text: (BARE[it.k] ? "" : it.label + ": ") + (o ? o[1].replace(/ \(\d+\)$/, "").replace(/^This month · /, "Ends ") : f[it.k]) });
   }); });
-  var open = !!state.clFilterOpen;
-  var html = '<div class="filters">' +
-    '<div class="quick">' + presets().map(function (p) {
+  return out;
+}
+
+/* Above the list: search with a filter button, one-tap smart lists, and what's applied. */
+function filterBar(f) {
+  var applied = appliedFilters(f, filterSpec());
+  var html = '<div class="finder">' +
+    '<div class="search-row"><input id="cl_search" type="search" autocomplete="off" placeholder="Search name or phone…" value="' + esc(state.clSearch || "") + '" />' +
+      '<button class="filter-btn' + (applied.length ? " has" : "") + '" data-act="clf-toggle" aria-label="Filters' + (applied.length ? ", " + applied.length + " applied" : "") + '">' +
+        icons.filter + "<span>Filters</span>" + (applied.length ? "<i>" + applied.length + "</i>" : "") + "</button></div>" +
+    '<div class="pills scroll quick">' + presets().map(function (p) {
       var on = Object.keys(DEFAULT_FILTER).every(function (k) { return f[k] === p.f[k]; });
-      return '<button class="chip-btn' + (on ? " on" : "") + '" data-act="clf-preset" data-id="' + p.id + '">' + esc(p.label) + " <b>" + p.n + "</b></button>";
-    }).join("") + "</div>" +
-    '<div class="field"><input id="cl_search" type="search" autocomplete="off" placeholder="Search name or phone…" value="' + esc(state.clSearch || "") + '" /></div>' +
-    '<div class="filter-tools"><button class="btn quiet small' + (applied.length ? " has" : "") + '" data-act="clf-toggle" aria-expanded="' + open + '">' + icons.filter +
-      "Filters" + (applied.length ? " · " + applied.length : "") + "</button>" +
-      '<label class="sort-pick"><span>Sort</span><select id="clf_sort">' + SORTS.map(function (x) { return opt(x[0], x[1], f.sort); }).join("") + "</select></label></div>";
+      return '<button class="pill' + (on ? " on" : "") + '" data-act="clf-preset" data-id="' + p.id + '">' + esc(p.label) + "<b>" + p.n + "</b></button>";
+    }).join("") + "</div>";
   if (applied.length) {
     html += '<div class="applied">' + applied.map(function (a) {
-      return '<button class="chip-btn on" data-act="clf-remove" data-k="' + a.k + '" aria-label="Remove filter ' + esc(a.text) + '">' + esc(a.text) + " <b>×</b></button>";
+      return '<button class="pill on small" data-act="clf-remove" data-k="' + a.k + '" aria-label="Remove filter ' + esc(a.text) + '">' + esc(a.text) + "<b>×</b></button>";
     }).join("") + '<button class="linkish" data-act="clf-clear">Clear all</button></div>';
   }
-  if (open) {
-    html += '<div class="filter-panel">' + spec.map(function (g) {
-      return '<div class="filter-group">' + esc(g.group) + '</div><div class="filter-grid">' + g.items.map(function (it) {
-        return "<label>" + esc(it.label) + '<select id="clf_' + it.k + '"' + (f[it.k] !== DEFAULT_FILTER[it.k] ? ' class="set"' : "") + ">" +
-          it.opts.map(function (x) { return opt(x[0], x[1], f[it.k]); }).join("") + "</select></label>";
-      }).join("") + "</div>";
-    }).join("") + '<div class="btnrow"><button class="btn go wide" data-act="clf-toggle">Show results</button></div></div>';
-  }
-  return html + (f.paid && !payMonthsLoaded() ? '<div class="loading">Loading payments…</div>' : "") + "</div>";
+  return html + "</div>";
+}
+
+/* The filter sheet: slides up over the list; every choice is one tap. */
+function filterSheet(f, count) {
+  if (!state.clFilterOpen) return "";
+  var spec = filterSpec(), n = appliedFilters(f, spec).length;
+  return '<div class="sheet-backdrop"><div class="sheet filter-sheet" role="dialog" aria-label="Filters">' +
+    '<div class="sheet-head"><b>Filters</b><button class="btn quiet small icon" data-act="clf-toggle" aria-label="Close">×</button></div>' +
+    spec.map(function (g) {
+      return '<div class="fgroup">' + esc(g.group) + "</div>" + g.items.map(function (it) {
+        var body = AS_SELECT[it.k]
+          ? '<select id="clf_' + it.k + '"' + (f[it.k] !== DEFAULT_FILTER[it.k] ? ' class="set"' : "") + ">" + it.opts.map(function (x) { return opt(x[0], x[1], f[it.k]); }).join("") + "</select>"
+          : '<div class="pills">' + it.opts.filter(function (x) { return x[0] !== "" ; }).map(function (x) {
+              return '<button class="pill' + (f[it.k] === x[0] ? " on" : "") + '" data-act="clf-set" data-k="' + it.k + '" data-v="' + esc(x[0]) + '">' + esc(x[0] === "all" ? "All" : x[1]) + "</button>";
+            }).join("") + "</div>";
+        return '<div class="fsec"><div class="flabel">' + esc(it.label) + "</div>" + body + "</div>";
+      }).join("");
+    }).join("") +
+    (f.paid && !payMonthsLoaded() ? '<div class="loading">Loading payments…</div>' : "") +
+    '<div class="sheet-foot">' + (n ? '<button class="linkish" data-act="clf-clear">Clear all</button>' : "<span></span>") +
+      '<button class="btn go" data-act="clf-toggle">Show ' + count + " client" + (count === 1 ? "" : "s") + "</button></div>" +
+  "</div></div>";
 }
 
 function tenureText(c) {
@@ -371,9 +391,10 @@ export function tabClients() {
 
   if (sub === "all") {
     var f = Object.assign({}, DEFAULT_FILTER, state.clFilter), shown = filterClients(f, state.clSearch), lv = lastVisits();
-    html += filterBar(f);
+    html += filterBar(f) + filterSheet(f, shown.length);
     html += '<div class="list-head"><h2>' + shown.length + " of " + all.length + " client" + (all.length === 1 ? "" : "s") + "</h2>" +
-      (shown.length ? '<button class="btn quiet small" data-act="clf-export">' + icons.download + "Excel</button>" : "") + "</div>" +
+      '<span class="list-tools"><label class="sort-mini"><span>Sort</span><select id="clf_sort" aria-label="Sort by">' + SORTS.map(function (x) { return opt(x[0], x[1], f.sort); }).join("") + "</select></label>" +
+      (shown.length ? '<button class="btn quiet small" data-act="clf-export">' + icons.download + "Excel</button>" : "") + "</span></div>" +
       '<div class="rows">' +
       (shown.slice(0, 300).map(function (x) {
         return clientRow(x, waBtn(x) + '<button class="btn quiet small" data-act="cl-edit" data-id="' + esc(x.id) + '">Open</button>',

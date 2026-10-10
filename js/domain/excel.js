@@ -9,6 +9,7 @@ import { state } from "../core/store.js";
 import { dayKey, tClock, monthLabel, DAYS } from "../utils/format.js";
 import { payrollFor } from "./payroll.js";
 import { allLeaves } from "./leave.js";
+import { periodStats } from "./reports.js";
 
 function buildWorkbook() {
   var P = state.cfg.pay, ym = state.month, wb = XLSX.utils.book_new();
@@ -57,6 +58,31 @@ function buildWorkbook() {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(staff), "Staff");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(leave), "Leave");
   return wb;
+}
+
+/** Workbook for any date range: per-staff summary + every punch. `only` = one staff id or "all". */
+export function exportRange(from, to, only) {
+  if (typeof XLSX === "undefined") throw new Error("Excel library didn't load. Check the connection and reload.");
+  var people = state.roster.filter(function (p) { return only && only !== "all" ? p.id === only : p.active !== false; });
+  var sum = [["Staff", "From", "To", "Days present", "Hours worked", "Late marks", "Leave days", "Absent days"]];
+  var punches = [["Staff", "Date", "Weekday", "Clock in", "Clock out", "Hours", "Shift", "Ended"]];
+  people.forEach(function (p) {
+    var s = periodStats(p, from, to);
+    sum.push([p.name, from, to, s.days, +(s.ms / 3600000).toFixed(2), s.late, s.leave, s.absent]);
+    var list = [];
+    Object.keys(state.logs).forEach(function (k) { if (k.indexOf("log:" + p.id + ":") === 0) list = list.concat(state.logs[k] || []); });
+    list.sort(function (a, b) { return a.start - b.start; }).forEach(function (e) {
+      var d = dayKey(e.start);
+      if (d < from || d > to) return;
+      punches.push([p.name, d, DAYS[new Date(d + "T00:00:00").getDay()], tClock(e.start), e.end ? tClock(e.end) : "still in",
+        e.end ? +((e.end - e.start) / 3600000).toFixed(2) : "", e.shiftName || "", !e.end ? "" : e.auto ? "auto (left site)" : "manual"]);
+    });
+  });
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sum), "Summary");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(punches), "Punches");
+  XLSX.writeFile(wb, "attendance-" + from + (to !== from ? "-to-" + to : "") + ".xlsx");
+  return "Workbook downloaded.";
 }
 
 /** Builds and downloads the workbook. Throws on failure (caller shows the message). */

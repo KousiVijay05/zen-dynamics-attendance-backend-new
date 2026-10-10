@@ -187,6 +187,17 @@ export function clockOut(at, auto) {
  * state.adminLoaded so the admin views stop showing the loading
  * skeleton. Ported verbatim from loadAdminData() in the original app.js.
  */
+/** Make sure everyone's punches for every month touching [from, to] are in memory. */
+export function loadLogsBetween(from, to) {
+  var jobs = [], y = +from.slice(0, 4), m = +from.slice(5, 7), ey = +to.slice(0, 4), em = +to.slice(5, 7);
+  while (y < ey || (y === ey && m <= em)) {
+    var ts = new Date(y, m - 1, 1, 12).getTime();
+    state.roster.forEach(function (p) { jobs.push(loadLog(p.id, ts)); });
+    m++; if (m > 12) { m = 1; y++; }
+  }
+  return Promise.all(jobs).then(emitChange);
+}
+
 export function loadAdminData() {
   state.adminLoaded = false;
   var jobs = [], monthTs = new Date(state.month + "-01T00:00:00").getTime();

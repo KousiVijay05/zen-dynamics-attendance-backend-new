@@ -1010,3 +1010,27 @@ Fixes:
 - "Clear 3 filters" showed while every box said "Any". The newer filters
   started out empty instead of "Any", so they were counted as applied.
 - A select box now always shows the value that is actually applied.
+
+## 2026-10-10 — Filter sheet with pills; staff Records by period (v38)
+
+**Client filters, redesigned.** The inline grid of dropdowns is gone.
+
+- Search box with a **Filters** button beside it (a badge shows how many
+  are applied).
+- Smart lists as a single swipeable row of pills with counts.
+- Applied filters as dark chips; tap one to remove it.
+- **Filters** opens a slide-up sheet. Every choice is a pill you tap once
+  (tap again to undo). Only Plan and Expiry month stay as dropdowns,
+  because their lists are long. The footer button says "Show N clients".
+- Sort moved next to the client count and the Excel button.
+
+**Staff attendance: Records by period.**
+
+- Period pills: Today, Yesterday, This week, Last week, Last 7 days,
+  By month, Custom dates (up to 92 days, across months).
+- A per-person summary for the period: days present, late, leave, absent
+  and hours. Counting is the same as in the WhatsApp reports.
+- **Share this report** sends the chosen period to WhatsApp. By month
+  keeps the Weekly and month buttons.
+- **Excel** follows the period: a Summary sheet and a Punches sheet, in a
+  file named by its dates. By month still gives the full payroll workbook.

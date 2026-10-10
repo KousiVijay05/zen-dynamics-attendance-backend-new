@@ -23,13 +23,13 @@ import {
   createWorkplace, showAdminOnly,
   attemptLogin, changePassword, backToSignin, signOut
 } from "../domain/auth.js";
-import { clockIn, clockOut, loadAdminData, openEntryFor } from "../domain/attendance.js";
+import { clockIn, clockOut, loadAdminData, openEntryFor, loadLogsBetween } from "../domain/attendance.js";
 import { addStaff, updateStaff, toggleActive, startEdit, cancelEdit } from "../domain/roster.js";
 import {
   toggleWeeklyOff, savePayRules, saveSiteSettings, addBatch, deleteBatch, addPackage, deletePackage,
   addShift, updateShift, deleteShift, startEditShift, cancelEditShift
 } from "../domain/org.js";
-import { exportExcel } from "../domain/excel.js";
+import { exportExcel, exportRange } from "../domain/excel.js";
 import { requestLeave, cancelLeave, decideLeave, allLeaves } from "../domain/leave.js";
 import {
   addClient, updateClient, renewClient, setClientActive, reminderText, waLinkTo, clientPhone,
@@ -37,7 +37,7 @@ import {
   loadMonth, exportClientsExcel, today as clToday, downloadTemplate, readImportFile, importClients,
   loadAllPayments, exportFullHistory, importAccounts
 } from "../domain/clients.js";
-import { dailyReport, weeklyReport, monthlyReport, leaveMessage } from "../domain/reports.js";
+import { dailyReport, weeklyReport, monthlyReport, leaveMessage, recRange, rangeReport } from "../domain/reports.js";
 import { shareWhatsApp, shareImage } from "../utils/whatsapp.js";
 import { attendanceSheet } from "../domain/reports.js";
 import { renderReportImage } from "../ui/reportImage.js";
@@ -91,6 +91,12 @@ export function initEvents() {
     if (ev.target.id === "cr_type") { state.clRenewType = ev.target.value; emitChange(); }
     if (ev.target.id === "p_month" || ev.target.id === "r_month") {
       state.month = ev.target.value; emitChange(); loadAdminData();
+    }
+    if (ev.target.id === "r_from" || ev.target.id === "r_to") {
+      state[ev.target.id === "r_from" ? "recFrom" : "recTo"] = ev.target.value;
+      state.msg = ""; emitChange();
+      var rr = recRange();
+      if (!rr.error) loadLogsBetween(rr.from, rr.to).catch(function (e) { say(e.message); });
     }
     if (ev.target.id === "r_person") {
       state.recPerson = ev.target.value; emitChange();
@@ -389,6 +395,14 @@ tasks: selectedTasks
       return;
     }
     if (act === "clf-toggle") { state.clFilterOpen = !state.clFilterOpen; emitChange(); return; }
+    if (act === "clf-set") {
+      var sk = t.getAttribute("data-k"), sv = t.getAttribute("data-v");
+      state.clFilter = Object.assign({}, state.clFilter);
+      state.clFilter[sk] = (state.clFilter[sk] === undefined ? DEFAULT_FILTER[sk] : state.clFilter[sk]) === sv ? DEFAULT_FILTER[sk] : sv;   // tap again to undo
+      emitChange();
+      if (sk === "paid" && state.clFilter.paid) loadPayMonths().catch(function (e) { say(e.message); });
+      return;
+    }
     if (act === "clf-remove") {
       var rk = t.getAttribute("data-k");
       state.clFilter = Object.assign({}, state.clFilter); state.clFilter[rk] = DEFAULT_FILTER[rk]; emitChange(); return;
@@ -518,8 +532,25 @@ tasks: selectedTasks
 
     if (act === "retryloc") { retryLocation().then(function () { emitChange(); }); return; }
 
+    if (act === "rec-period") {
+      state.recPeriod = t.getAttribute("data-v");
+      if (state.recPeriod === "custom" && !state.recFrom) { state.recTo = dayKey(Date.now()); state.recFrom = state.recTo.slice(0, 8) + "01"; }
+      state.msg = ""; emitChange();
+      var pr = recRange();
+      if (!pr.error) loadLogsBetween(pr.from, pr.to).catch(function (e) { say(e.message); });
+      return;
+    }
+    if (act === "wa-period") {
+      if (!state.adminLoaded) { say("Still loading everyone's records — try again in a moment."); return; }
+      try { shareWhatsApp(rangeReport()); } catch (err) { say(err.message); }
+      return;
+    }
     if (act === "xlsx") {
-      try { say(exportExcel(), true); } catch (err) { say(err.message); }
+      try {
+        var xr = recRange();
+        if (state.tab === "records" && (state.recPeriod || "month") !== "month") { if (xr.error) throw new Error(xr.error); say(exportRange(xr.from, xr.to, state.recPerson), true); }
+        else say(exportExcel(), true);
+      } catch (err) { say(err.message); }
       return;
     }
 

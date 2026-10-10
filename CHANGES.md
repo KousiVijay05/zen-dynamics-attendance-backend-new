@@ -953,3 +953,24 @@ live 12, whatsapp 10, image 14, leavesite 14, unit 14 = 363).
 - **Paid:** Paid this month, Paid last month, Not paid this month, Paid
   last month but not this month. These two months of payments load when
   the filter is first used.
+
+## 2026-10-10 — Quick lists and deeper client filters (v35)
+
+Modelled on what other gym apps offer (smart lists, expiry by month,
+join date, membership length, renewal history).
+
+- **Quick lists** above the search box, each showing its count: New this
+  month, Ending in 7 days, Expired this month, Lost (expired 30+ days),
+  Active but not seen in 14 days, 1 year+ members, First membership.
+- **Expiry month:** every month in which plans end or ended, with counts.
+- **Member for:** under 1 month, 1–3, 3–6, 6–12 months, 1 year or more.
+  This counts the months a client actually held a membership; gaps between
+  plans are left out.
+- **Joined:** this month, last month, last 90 days, this year, before this
+  year.
+- **Renewals:** first membership, renewed at least once, 3 or more.
+- **Status** gains "Active + ending soon". **Plan dates** gains "Expired
+  over 30 days ago".
+- **Sort by** gains Newest joiners and Longest membership.
+- Each row shows "Member 8 months · 3 memberships". The Excel export
+  gains the columns Months as member and Memberships.

@@ -33,7 +33,7 @@ import { exportExcel } from "../domain/excel.js";
 import { requestLeave, cancelLeave, decideLeave, allLeaves } from "../domain/leave.js";
 import {
   addClient, updateClient, renewClient, setClientActive, reminderText, waLinkTo, clientPhone,
-  startSession, discardSession, togglePick, submitSession, voidMark, markToday, canVoid, filterClients, exportFiltered, DEFAULT_FILTER, loadPayMonths,
+  startSession, discardSession, togglePick, submitSession, voidMark, markToday, canVoid, filterClients, exportFiltered, DEFAULT_FILTER, loadPayMonths, presets,
   loadMonth, exportClientsExcel, today as clToday, downloadTemplate, readImportFile, importClients,
   loadAllPayments, exportFullHistory, importAccounts
 } from "../domain/clients.js";
@@ -71,7 +71,7 @@ export function initEvents() {
     if (ev.target.id === "ca_type") { state.clAddType = ev.target.value; emitChange(); }
     if (ev.target.id === "ca_pkg") { state.clAddPkg = ev.target.value; emitChange(); }
     if (ev.target.id === "cr_pkg") { state.clRenewPkg = ev.target.value; emitChange(); }
-    var fm = /^clf_(status|window|seen|plan|length|paid|balance|sort)$/.exec(ev.target.id);
+    var fm = /^clf_(status|window|endym|seen|plan|length|tenure|joined|renewed|paid|balance|sort)$/.exec(ev.target.id);
     if (fm) {
       state.clFilter = Object.assign({}, state.clFilter); state.clFilter[fm[1]] = ev.target.value; emitChange();
       if (fm[1] === "paid" && ev.target.value) loadPayMonths().catch(function (e) { state.msg = e.message; state.msgOk = false; emitChange(); });
@@ -381,6 +381,11 @@ tasks: selectedTasks
       if (reason === null) return;
       voidMark(clToday(), id, reason || "Marked by mistake")
         .then(function (msg) { sayAndPaint(msg, true); }).catch(function (err) { say(err.message); });
+      return;
+    }
+    if (act === "clf-preset") {
+      var ps = presets().filter(function (p) { return p.id === t.getAttribute("data-id"); })[0];
+      if (ps) { state.clFilter = Object.assign({}, ps.f); state.clSearch = ""; emitChange(); }
       return;
     }
     if (act === "clf-clear") { state.clFilter = Object.assign({}, DEFAULT_FILTER); state.clSearch = ""; emitChange(); return; }

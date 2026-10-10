@@ -378,3 +378,8 @@ details.sess[open] > summary { background: var(--panel-2); }
 
 .pkg-info { margin: 8px 0 0; font-size: 13.5px; font-weight: 650; color: var(--gold-strong); background: var(--gold-soft); border-radius: var(--radius-sm); padding: 8px 12px; }
 .month-pick { margin-top: 10px; }
+.quick { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; margin: 0 -2px; scrollbar-width: none; }
+.quick::-webkit-scrollbar { display: none; }
+.quick .chip-btn { flex: none; white-space: nowrap; }
+.quick .chip-btn b { margin-left: 4px; font-weight: 700; color: var(--ink); }
+.quick .chip-btn.on { background: var(--gold-soft); border-color: var(--gold); }

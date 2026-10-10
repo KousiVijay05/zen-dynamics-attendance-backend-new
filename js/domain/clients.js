@@ -329,7 +329,63 @@ export function sessionsOn(k) {
 
 /* ---------- finding clients ---------- */
 
-export var DEFAULT_FILTER = { status: "all", window: "", seen: "", plan: "", length: "", paid: "", balance: "", sort: "name" };
+export var DEFAULT_FILTER = { status: "all", window: "", endym: "", seen: "", plan: "", length: "", tenure: "", joined: "", renewed: "", paid: "", balance: "", sort: "name" };
+
+var MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+export function monthLabel(ym) { return MON[+ym.slice(5, 7) - 1] + " " + ym.slice(0, 4); }
+
+/** Every plan a client has held: past ones (admins only) plus the current one. */
+function allPlans(c) {
+  var h = (((state.clientPriv || {})[c.id] || {}).history || []).slice();
+  if (c.plan) h.push(c.plan);
+  return h;
+}
+
+/** How many memberships a client has had. */
+export function membershipCount(c) { return allPlans(c).length; }
+
+/** Whole months a client has actually held a membership (gaps not counted), up to today. */
+export function memberMonths(c) {
+  var t = Date.parse(today()), spans = [];
+  allPlans(c).forEach(function (p) {
+    if (!p.start) return;
+    var a = Date.parse(p.start), b = p.end ? Date.parse(p.end) : t;
+    if (isNaN(a) || isNaN(b)) return;
+    if (b > t) b = t;
+    if (b >= a) spans.push([a, b]);
+  });
+  spans.sort(function (x, y) { return x[0] - y[0]; });
+  var days = 0, upto = -Infinity;
+  spans.forEach(function (s) {
+    var from = Math.max(s[0], upto + DAY);
+    if (s[1] >= from) { days += (s[1] - from) / DAY + 1; upto = s[1]; }
+  });
+  return Math.round(days / 30.44);
+}
+
+/** Months in which current plans end(ed), newest first, with how many clients each. */
+export function endMonths() {
+  var m = {};
+  state.clients.forEach(function (c) {
+    if (c.active === false || !c.plan || !c.plan.end) return;
+    var ym = c.plan.end.slice(0, 7); m[ym] = (m[ym] || 0) + 1;
+  });
+  return Object.keys(m).sort().reverse().map(function (ym) { return { ym: ym, n: m[ym] }; });
+}
+
+/** Ready-made lists (what most gym apps call smart lists). */
+export function presets() {
+  var cur = today().slice(0, 7);
+  return [
+    { id: "new", label: "New this month", f: { joined: "this" } },
+    { id: "week", label: "Ending in 7 days", f: { window: "ends:7", sort: "end" } },
+    { id: "expm", label: "Expired this month", f: { status: "expired", endym: cur, sort: "endlast" } },
+    { id: "lost", label: "Lost (expired 30+ days)", f: { window: "expiredbefore:30", sort: "endlast" } },
+    { id: "dormant", label: "Active, not seen 14 days", f: { status: "current", seen: "14", sort: "seen" } },
+    { id: "loyal", label: "1 year+ members", f: { tenure: "12", sort: "tenure" } },
+    { id: "first", label: "First membership", f: { status: "current", renewed: "first" } }
+  ].map(function (p) { p.f = Object.assign({}, DEFAULT_FILTER, p.f); p.n = filterClients(p.f, "").length; return p; });
+}
 
 /** "yyyy-mm" of this month and last month. */
 export function payMonths() {
@@ -381,7 +437,25 @@ export function filterClients(f, q) {
   var list = state.clients.filter(function (c) {
     var st = clientStatus(c), p = c.plan || {};
     if (f.status === "all" && st.kind === "off") return false;
-    if (f.status !== "all" && f.status !== st.kind) return false;
+    if (f.status === "current" && st.kind !== "active" && st.kind !== "soon") return false;
+    if (f.status !== "all" && f.status !== "current" && f.status !== st.kind) return false;
+    if (f.endym && !(p.end && p.end.slice(0, 7) === f.endym)) return false;
+    if (f.tenure) {
+      var tm = memberMonths(c);
+      if (f.tenure === "0" ? tm >= 1 : f.tenure === "1" ? !(tm >= 1 && tm < 3) : f.tenure === "3" ? !(tm >= 3 && tm < 6) : f.tenure === "6" ? !(tm >= 6 && tm < 12) : tm < 12) return false;
+    }
+    if (f.joined) {
+      var j = c.joined || "", jm = payMonths();
+      if (f.joined === "this" && j.slice(0, 7) !== jm.cur) return false;
+      if (f.joined === "last" && j.slice(0, 7) !== jm.prev) return false;
+      if (f.joined === "90" && !(j && j >= minusDays(90))) return false;
+      if (f.joined === "year" && j.slice(0, 4) !== t.slice(0, 4)) return false;
+      if (f.joined === "before" && !(j && j.slice(0, 4) < t.slice(0, 4))) return false;
+    }
+    if (f.renewed) {
+      var mc = membershipCount(c);
+      if (f.renewed === "first" ? mc !== 1 : f.renewed === "renewed" ? mc < 2 : mc < 3) return false;
+    }
     if (f.window) {
       var w = f.window.split(":"), n = +w[1];
       if (w[0] === "ends" && !(p.end && p.end >= t && p.end <= dayKey(Date.now() + n * DAY))) return false;
@@ -410,7 +484,9 @@ export function filterClients(f, q) {
     end: function (a, b) { return ((a.plan || {}).end || "9999") < ((b.plan || {}).end || "9999") ? -1 : 1; },
     endlast: function (a, b) { return ((a.plan || {}).end || "0000") > ((b.plan || {}).end || "0000") ? -1 : 1; },
     seen: function (a, b) { return (lv[a.id] || "0000") < (lv[b.id] || "0000") ? -1 : 1; },
-    since: function (a, b) { return (a.joined || "") < (b.joined || "") ? -1 : 1; }
+    since: function (a, b) { return (a.joined || "") < (b.joined || "") ? -1 : 1; },
+    newest: function (a, b) { return (a.joined || "") > (b.joined || "") ? -1 : 1; },
+    tenure: function (a, b) { return memberMonths(b) - memberMonths(a); }
   };
   return list.sort(by[f.sort] || by.name);
 }
@@ -426,10 +502,10 @@ export function planNames() {
 export function exportFiltered(list) {
   if (typeof XLSX === "undefined") throw new Error("Excel library didn't load. Check the connection and reload.");
   var lv = lastVisits(), priv = state.clientPriv || {};
-  var rows = [["Client", "Phone", "Status", "Plan", "Start", "End", "Last visit", "Member since", "Notes"]];
+  var rows = [["Client", "Phone", "Status", "Plan", "Start", "End", "Last visit", "Member since", "Months as member", "Memberships", "Notes"]];
   list.forEach(function (c) {
     var p = c.plan || {};
-    rows.push([c.name, (priv[c.id] || {}).phone || "", clientStatus(c).label, p.name || "", p.start || "", p.end || "", lv[c.id] || "", c.joined || "", (priv[c.id] || {}).notes || ""]);
+    rows.push([c.name, (priv[c.id] || {}).phone || "", clientStatus(c).label, p.name || "", p.start || "", p.end || "", lv[c.id] || "", c.joined || "", memberMonths(c), membershipCount(c), (priv[c.id] || {}).notes || ""]);
   });
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "Clients");

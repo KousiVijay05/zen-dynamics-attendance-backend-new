@@ -300,6 +300,7 @@ export function submitSession() {
   /* "at" is stamped by the server, not this phone, so a wrong phone clock
      can't backdate (or forward-date) a mark — the rules require it. */
   var day = k8(s.day), at = { ".sv": "timestamp" }, paths = {}, clients = {};
+  var remind = ids.map(function (id) { var c = state.clients.filter(function (x) { return x.id === id; })[0]; return alertFor(c) ? c.name.split(" ")[0] : null; }).filter(Boolean);
   ids.forEach(function (id) {
     var old = markToday(id);
     var mark = { by: state.me.id, byName: state.me.name, at: at, sid: s.sid, batch: s.batch, batchName: s.batchName,
@@ -313,7 +314,7 @@ export function submitSession() {
                                           start: s.start, at: at, clients: clients };
   return A().update(paths).then(function () {
     state.session = null; persist(); emitChange();
-    return s.batchName + ": " + ids.length + " client" + (ids.length === 1 ? "" : "s") + " marked.";
+    return s.batchName + ": " + ids.length + " client" + (ids.length === 1 ? "" : "s") + " marked." + (remind.length ? " Remind about renewal: " + remind.join(", ") + "." : "");
   }, function (err) {
     if (/^Not allowed/.test(err.message)) throw new Error("Someone else just marked one of these clients. The list has been refreshed — check and submit again.");
     throw err;
@@ -415,19 +416,66 @@ export function birthdayText(c) {
 }
 
 /** Ready-made lists (what most gym apps call smart lists). */
+export var LIST_GROUPS = [["due", "Expiring"], ["exp", "Expired"], ["pay", "Payments"], ["mem", "Members"]];
+
+/** Ready-made lists, grouped (see LIST_GROUPS). Each has its count; payment lists also carry this month's amount. */
 export function presets() {
-  var cur = today().slice(0, 7);
+  var pm = payMonths(), cur = pm.cur, loaded = payMonthsLoaded();
+  var paidBy = {};
+  ((state.clPays || {})[payKeyOf(cur)] || []).forEach(function (x) { paidBy[x.clientId] = (paidBy[x.clientId] || 0) + x.amount; });
   return [
-    { id: "new", label: "New this month", f: { joined: "this" } },
-    { id: "week", label: "Ending in 7 days", f: { window: "ends:7", sort: "end" } },
-    { id: "expm", label: "Expired this month", f: { status: "expired", endym: cur, sort: "endlast" } },
-    { id: "lost", label: "Lost (expired 30+ days)", f: { window: "expiredbefore:30", sort: "endlast" } },
-    { id: "dormant", label: "Active, not seen 14 days", f: { status: "current", seen: "14", sort: "seen" } },
-    { id: "loyal", label: "1 year+ members", f: { tenure: "12", sort: "tenure" } },
-    { id: "first", label: "First membership", f: { status: "current", renewed: "first" } },
-    { id: "bday", label: "Birthdays this week", f: { bday: "7", sort: "bday" } },
-    { id: "paused", label: "Paused", f: { status: "paused" } }
-  ].map(function (p) { p.f = Object.assign({}, DEFAULT_FILTER, p.f); p.n = filterClients(p.f, "").length; return p; });
+    { id: "ends3", group: "due", label: "Ending in 3 days", f: { window: "ends:3", sort: "end" } },
+    { id: "week", group: "due", label: "Ending in 7 days", f: { window: "ends:7", sort: "end" } },
+    { id: "endsmonth", group: "due", label: "Ending this month", f: { window: "endsmonth", sort: "end" } },
+    { id: "ends30", group: "due", label: "Ending in 30 days", f: { window: "ends:30", sort: "end" } },
+    { id: "expm", group: "exp", label: "Expired this month", f: { status: "expired", endym: cur, sort: "endlast" } },
+    { id: "explast", group: "exp", label: "Expired last month", f: { status: "expired", endym: pm.prev, sort: "endlast" } },
+    { id: "expolder", group: "exp", label: "Expired before that", f: { window: "expiredolder", sort: "endlast" } },
+    { id: "still", group: "exp", label: "Expired, still coming", f: { status: "expired", seen: "in7", sort: "endlast" } },
+    { id: "paidthis", group: "pay", label: "Paid this month", f: { paid: "this" }, pay: true },
+    { id: "paidnew", group: "pay", label: "New clients paid", f: { paid: "newthis" }, pay: true },
+    { id: "paidrenew", group: "pay", label: "Renewals paid", f: { paid: "renewthis" }, pay: true },
+    { id: "unpaid", group: "pay", label: "Paid last month, not this", f: { paid: "lastnotthis" }, pay: true, noAmt: true },
+    { id: "new", group: "mem", label: "New this month", f: { joined: "this", sort: "newest" } },
+    { id: "dormant", group: "mem", label: "Active, not seen 14 days", f: { status: "current", seen: "14", sort: "seen" } },
+    { id: "loyal", group: "mem", label: "1 year+ members", f: { tenure: "12", sort: "tenure" } },
+    { id: "first", group: "mem", label: "First membership", f: { status: "current", renewed: "first" } },
+    { id: "bday", group: "mem", label: "Birthdays this week", f: { bday: "7", sort: "bday" } },
+    { id: "paused", group: "mem", label: "Paused", f: { status: "paused" } }
+  ].map(function (p) {
+    p.f = Object.assign({}, DEFAULT_FILTER, p.f);
+    if (p.pay && !loaded) { p.n = null; return p; }               // payments still loading
+    var list = filterClients(p.f, "");
+    p.n = list.length;
+    if (p.pay && !p.noAmt) p.amt = list.reduce(function (s, c) { return s + (paidBy[c.id] || 0); }, 0);
+    return p;
+  });
+}
+
+/* ---------- renewal reminders for coaches (no phones or payments needed) ---------- */
+
+/** null, or { level: "expired" | "soon", text } when a coach should mention renewal to this client. */
+export function alertFor(c) {
+  if (!c || c.active === false || !c.plan) return null;
+  var st = clientStatus(c), p = c.plan;
+  if (st.kind === "expired") return { level: "expired", text: st.label };
+  if ((st.kind === "soon" || st.kind === "active") && ((p.type !== "pack" && st.daysLeft <= REMIND_DAYS) || (p.type === "pack" && (st.left <= 1 || (st.daysLeft != null && st.daysLeft <= REMIND_DAYS)))))
+    return { level: "soon", text: st.label };
+  return null;
+}
+export var REMIND_DAYS = 3;
+
+/** Who to remind: ending within 3 days, and expired in the last 30 days (or expired and still coming). */
+export function renewalAlerts() {
+  var lv = lastVisits(), cut = minusDays(30), soon = [], expired = [];
+  state.clients.forEach(function (c) {
+    var a = alertFor(c);
+    if (!a) return;
+    if (a.level === "soon") soon.push(c);
+    else if ((c.plan.end && c.plan.end >= cut) || (lv[c.id] && lv[c.id] >= cut)) expired.push(c);
+  });
+  var byEnd = function (x, y) { return ((x.plan.end || "9999") < (y.plan.end || "9999")) ? -1 : 1; };
+  return { soon: soon.sort(byEnd), expired: expired.sort(byEnd).reverse() };
 }
 
 /** "yyyy-mm" of this month and last month. */
@@ -507,6 +555,8 @@ export function filterClients(f, q) {
       var mc = membershipCount(c);
       if (f.renewed === "first" ? mc !== 1 : f.renewed === "renewed" ? mc < 2 : mc < 3) return false;
     }
+    if (f.window === "endsmonth" && !(st.kind !== "expired" && p.end && p.end >= t && p.end.slice(0, 7) === t.slice(0, 7))) return false;
+    if (f.window === "expiredolder" && !(st.kind === "expired" && (!p.end || p.end < payMonths().prev + "-01"))) return false;
     if (f.window) {
       var w = f.window.split(":"), n = +w[1];
       if (w[0] === "ends" && !(p.end && p.end >= t && p.end <= dayKey(Date.now() + n * DAY))) return false;
@@ -515,7 +565,8 @@ export function filterClients(f, q) {
     }
     if (f.seen) {
       var last = lv[c.id];
-      if (f.seen === "never" ? !!last : (last && last >= minusDays(+f.seen))) return false;
+      if (f.seen === "in7") { if (!(last && last >= minusDays(7))) return false; }
+      else if (f.seen === "never" ? !!last : (last && last >= minusDays(+f.seen))) return false;
     }
     if (f.plan && p.name !== f.plan) return false;
     if (f.length && planLength(c.plan) !== f.length) return false;
@@ -525,6 +576,9 @@ export function filterClients(f, q) {
       if (f.paid === "last" && !prev) return false;
       if (f.paid === "notthis" && cur) return false;
       if (f.paid === "lastnotthis" && !(prev && !cur)) return false;
+      var isNew = (c.joined || "").slice(0, 7) === pm.cur;          // joined this month = a new sale, else a renewal
+      if (f.paid === "newthis" && !(cur && isNew)) return false;
+      if (f.paid === "renewthis" && !(cur && !isNew)) return false;
     }
     if (f.balance === "due" && !/balance due/i.test((priv[c.id] || {}).notes || "")) return false;
     if (q && c.name.toLowerCase().indexOf(q) < 0 && ((priv[c.id] || {}).phone || "").indexOf(q) < 0) return false;

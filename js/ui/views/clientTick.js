@@ -6,7 +6,7 @@
    payments here — coaches can't read those at all. */
 import { state } from "../../core/store.js";
 import { esc, tClock, hm12 } from "../../utils/format.js";
-import { clientStatus, tickedToday, markToday, batches, suggestedBatch, sessionsOn, canVoid, undoMinutesLeft, today, coachList } from "../../domain/clients.js";
+import { clientStatus, tickedToday, markToday, batches, suggestedBatch, sessionsOn, canVoid, undoMinutesLeft, today, coachList, alertFor, renewalAlerts } from "../../domain/clients.js";
 import { brandMark } from "../components/brand.js";
 import { icons, avatar } from "../components/icons.js";
 import { distanceNow } from "../../domain/geofence.js";
@@ -25,6 +25,21 @@ function pill(st) {
   return '<span class="tag ' + (st.kind === "expired" ? "" : st.kind === "soon" || st.kind === "future" || st.kind === "none" || st.kind === "paused" ? "pending" : "on") + '">' + esc(st.short) + "</span>";
 }
 
+/* Who to talk to about renewing: ending within 3 days, or recently expired. Names and dates only. */
+function reminders() {
+  var r = renewalAlerts(), n = r.soon.length + r.expired.length;
+  if (!n) return "";
+  var row = function (c, cls) {
+    var st = clientStatus(c), in_ = tickedToday(c.id);
+    return '<div class="row"><span class="person-cell">' + avatar(c.name, in_ ? "in" : "") + '<span><span class="who">' + esc(c.name) + "</span>" +
+      '<span class="tag ' + cls + '">' + esc(st.short) + '</span><br><span class="meta">' + esc((c.plan ? c.plan.name + " · " : "") + st.label) + (in_ ? " · here today" : "") + "</span></span></span></div>";
+  };
+  return '<details class="sess renewals"' + (n <= 6 ? " open" : "") + '><summary><span><span class="who">Renewal reminders</span><br><span class="meta">' +
+      (r.soon.length ? r.soon.length + " ending in 3 days" : "") + (r.soon.length && r.expired.length ? " · " : "") + (r.expired.length ? r.expired.length + " expired" : "") +
+      ' — please remind them</span></span><span class="dur">' + n + "</span></summary>" +
+    '<div class="rows">' + r.soon.map(function (c) { return row(c, "pending"); }).join("") + r.expired.map(function (c) { return row(c, "warn"); }).join("") + "</div></details>";
+}
+
 /* Taking a session: search, tick, submit. */
 function taking() {
   var s = state.session;
@@ -40,16 +55,19 @@ function taking() {
 
   if (!list.length) return html + '<div class="rows" style="margin-top:12px"><div class="empty">No clients yet. An admin adds them in Admin → Clients.</div></div>';
   html += '<div class="rows" style="margin-top:12px">' + (shown.length ? shown.map(function (c) {
-    var st = clientStatus(c), done = tickedToday(c.id), on = !!s.picked[c.id] && !done;
+    var st = clientStatus(c), done = tickedToday(c.id), on = !!s.picked[c.id] && !done, al = alertFor(c);
     var meta = done ? "Already in · " + esc(done.batchName || "") + " · by " + esc(who(done.by, done.byName)) : esc(st.label);
-    return '<div class="row cl-row' + (on ? " is-in" : "") + (done ? " is-done" : "") + '">' +
+    return '<div class="row cl-row' + (on ? " is-in" : "") + (done ? " is-done" : "") + (al ? " needs-" + al.level : "") + '">' +
       '<span class="person-cell">' + avatar(c.name, on || done ? "in" : "") +
-        '<span><span class="who">' + esc(c.name) + "</span>" + pill(st) + '<br><span class="meta">' + meta + "</span></span></span>" +
+        '<span><span class="who">' + esc(c.name) + "</span>" + pill(st) + '<br><span class="meta">' + meta + "</span>" +
+          (al && !done ? '<br><span class="renew-flag ' + al.level + '">' + (al.level === "expired" ? "Expired — remind to renew" : "Ending soon — remind to renew") + "</span>" : "") + "</span></span>" +
       (done ? '<span class="tick done" aria-hidden="true">' + CHECK + "</span>"
             : '<button class="tick' + (on ? " on" : "") + '" data-act="cl-pick" data-id="' + esc(c.id) + '" aria-pressed="' + on + '" aria-label="' + (on ? "Untick " : "Tick ") + esc(c.name) + '">' + CHECK + "</button>") +
     "</div>";
   }).join("") : '<div class="empty">No client matches “' + esc(q) + "”.</div>") + "</div>";
 
+  var flagged = list.filter(function (c) { return s.picked[c.id] && !tickedToday(c.id) && alertFor(c); });
+  if (flagged.length) html += '<div class="remind-note"><b>Remind before they leave:</b> ' + flagged.map(function (c) { return esc(c.name.split(" ")[0]) + " (" + esc(clientStatus(c).short.toLowerCase()) + ")"; }).join(", ") + "</div>";
   html += '<div class="submit-bar"><button class="btn go" data-act="cl-submit"' + (picked ? "" : " disabled") + ">Submit · " + picked + " client" + (picked === 1 ? "" : "s") + "</button>" +
     '<button class="btn quiet" data-act="cl-discard">Discard</button></div>';
   html += '<p class="msg' + (state.msgOk ? " ok" : "") + '">' + esc(state.msg) + "</p>";
@@ -61,7 +79,7 @@ function taking() {
 function overview() {
   var bs = batches().slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
   var sug = suggestedBatch();
-  var html = '<div class="card"><h3>Start a session</h3>' +
+  var html = reminders() + '<div class="card"><h3>Start a session</h3>' +
     '<div class="field"><label for="cl_batch">Batch</label><select id="cl_batch">' +
       bs.map(function (b) { return '<option value="' + esc(b.id) + '"' + (sug && sug.id === b.id ? " selected" : "") + ">" + esc(b.name) + (/\d/.test(b.name) ? "" : " · " + esc(hm12(b.start)) + (b.end ? "–" + esc(hm12(b.end)) : "")) + "</option>"; }).join("") +
       '<option value="general"' + (bs.length ? "" : " selected") + ">General session (no batch)</option></select></div>" +

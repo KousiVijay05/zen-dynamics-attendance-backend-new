@@ -1045,3 +1045,33 @@ Fixes:
   dropdown: a year with ‹ › arrows and a 12-month grid. Each month shows
   how many plans end in it. Months with none cannot be tapped, and the
   current month is outlined. Tap a month to filter; tap again to undo.
+
+## 2026-10-10 — Grouped client lists and renewal reminders for coaches (v40)
+
+**Clients list (admin).** The row of nine pills is replaced by four tabs,
+each with tiles showing a count. Tap a tile to see those clients; tap it
+again to clear.
+
+- **Expiring:** in 3 days, in 7 days, this month, in 30 days.
+- **Expired:** this month, last month, before that, and "Expired, still
+  coming" (expired but ticked in a session in the last 7 days).
+- **Payments:** Paid this month, New clients paid, Renewals paid (each
+  with the amount collected), and Paid last month, not this.
+  A client who joined this month counts as new; everyone else is a renewal.
+- **Members:** New this month, Active not seen 14 days, 1 year+, First
+  membership, Birthdays this week, Paused.
+
+The same choices are available in the filter sheet.
+
+**Coaches: renewal reminders, tied to attendance.**
+
+- The coach's home screen says how many clients end within 3 days and
+  how many have expired.
+- Client sessions opens with a **Renewal reminders** card: who ends within
+  3 days, and who expired in the last 30 days (or expired and still
+  comes). It also marks who is here today.
+- While ticking, those clients are flagged "Ending soon" or "Expired —
+  remind to renew". Before Submit a note lists the flagged clients who
+  were ticked, and the confirmation after Submit repeats their names.
+- Coaches still see names, plans and dates only: no phones, no payments.
+  Expired clients can still be ticked.

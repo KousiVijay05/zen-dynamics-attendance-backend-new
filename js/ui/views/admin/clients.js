@@ -4,7 +4,7 @@ import { state } from "../../../core/store.js";
 import { esc, shortDate } from "../../../utils/format.js";
 import { money } from "../../../domain/payroll.js";
 import { clientStatus, clientPhone, usedSessions, suggestedStart, today, monthReport, PAY_MODES, importable, clientLedger,
-         filterClients, planNames, lastVisits, DEFAULT_FILTER, packages, packageById, packageValidity, accountsToAdd, accountsMonths, payMonthsLoaded, endMonths, monthLabel, presets, memberMonths, membershipCount, pauseOf, pausedDays, birthdayIn, clientDob } from "../../../domain/clients.js";
+         filterClients, planNames, lastVisits, DEFAULT_FILTER, packages, packageById, packageValidity, accountsToAdd, accountsMonths, payMonthsLoaded, endMonths, monthLabel, presets, LIST_GROUPS, memberMonths, membershipCount, pauseOf, pausedDays, birthdayIn, clientDob } from "../../../domain/clients.js";
 
 function opt(v, label, cur) { return '<option value="' + esc(v) + '"' + (v === cur ? " selected" : "") + ">" + esc(label) + "</option>"; }
 
@@ -23,13 +23,14 @@ function filterSpec() {
       { k: "endym", label: "Expiry month", opts: [["", "Any month"]].concat(endMonths().map(function (m) {
         return [m.ym, (m.ym < nowYm ? "Expired " : m.ym === nowYm ? "This month · " : "Ends ") + monthLabel(m.ym) + " (" + m.n + ")"]; })) },
       { k: "window", label: "Ending / expired", opts: [["", "Any"], ["ends:7", "Ends within 7 days"], ["ends:15", "Ends within 15 days"], ["ends:30", "Ends within 30 days"],
-        ["expired:30", "Expired in last 30 days"], ["expired:90", "Expired in last 90 days"], ["expiredbefore:30", "Expired over 30 days ago"], ["expiredbefore:90", "Expired over 90 days ago"]] },
+        ["expired:30", "Expired in last 30 days"], ["expired:90", "Expired in last 90 days"], ["expiredbefore:30", "Expired over 30 days ago"], ["expiredbefore:90", "Expired over 90 days ago"],
+        ["ends:3", "Ends within 3 days"], ["endsmonth", "Ends this month"], ["expiredolder", "Expired before last month"]] },
       { k: "joined", label: "Joined", opts: [["", "Any time"], ["this", "This month"], ["last", "Last month"], ["90", "Last 90 days"], ["year", "This year"], ["before", "Before this year"]] },
       { k: "tenure", label: "Member for", opts: [["", "Any"], ["0", "Under 1 month"], ["1", "1–3 months"], ["3", "3–6 months"], ["6", "6–12 months"], ["12", "1 year or more"]] }
     ] },
     { group: "Visits, payments, birthday", items: [
-      { k: "seen", label: "Last visit", opts: [["", "Any"], ["7", "Not seen in 7 days"], ["14", "Not seen in 14 days"], ["30", "Not seen in 30 days"], ["never", "Never marked"]] },
-      { k: "paid", label: "Paid", opts: [["", "Any"], ["this", "Paid this month"], ["last", "Paid last month"], ["notthis", "Not paid this month"], ["lastnotthis", "Paid last month, not this month"]] },
+      { k: "seen", label: "Last visit", opts: [["", "Any"], ["7", "Not seen in 7 days"], ["14", "Not seen in 14 days"], ["30", "Not seen in 30 days"], ["never", "Never marked"], ["in7", "Came in the last 7 days"]] },
+      { k: "paid", label: "Paid", opts: [["", "Any"], ["this", "Paid this month"], ["last", "Paid last month"], ["notthis", "Not paid this month"], ["lastnotthis", "Paid last month, not this month"], ["newthis", "New clients who paid this month"], ["renewthis", "Renewals paid this month"]] },
       { k: "balance", label: "Balance", opts: [["", "Any"], ["due", "Has balance due"]] },
       { k: "bday", label: "Birthday", opts: [["", "Any"], ["today", "Today"], ["7", "In the next 7 days"], ["month", "This month"], ["next", "Next month"], ["none", "Not recorded"]] }
     ] }
@@ -78,6 +79,20 @@ function appliedFilters(f, spec) {
   return out;
 }
 
+/* Ready-made lists as tiles, one group at a time: Expiring · Expired · Payments · Members. */
+function listTiles(f) {
+  var all = presets(), isOn = function (p) { return Object.keys(DEFAULT_FILTER).every(function (k) { return f[k] === p.f[k]; }); };
+  var active = all.filter(isOn)[0];
+  var g = state.clListGroup || (active ? active.group : "due");
+  return '<div class="lists"><div class="seg-pills" role="tablist" aria-label="Lists">' + LIST_GROUPS.map(function (x) {
+      return '<button class="seg-pill' + (g === x[0] ? " on" : "") + '" role="tab" aria-selected="' + (g === x[0]) + '" data-act="clf-group" data-v="' + x[0] + '">' + x[1] + "</button>";
+    }).join("") + "</div>" +
+    '<div class="ltiles">' + all.filter(function (p) { return p.group === g; }).map(function (p) {
+      return '<button class="ltile' + (isOn(p) ? " on" : "") + '" data-act="clf-preset" data-id="' + p.id + '">' +
+        "<b>" + (p.n === null ? "…" : p.n) + "</b><span>" + esc(p.label) + "</span>" + (p.amt != null ? "<i>" + money(p.amt) + "</i>" : "") + "</button>";
+    }).join("") + "</div></div>";
+}
+
 /* Above the list: search with a filter button, one-tap smart lists, and what's applied. */
 function filterBar(f) {
   var applied = appliedFilters(f, filterSpec());
@@ -85,10 +100,7 @@ function filterBar(f) {
     '<div class="search-row"><input id="cl_search" type="search" autocomplete="off" placeholder="Search name or phone…" value="' + esc(state.clSearch || "") + '" />' +
       '<button class="filter-btn' + (applied.length ? " has" : "") + '" data-act="clf-toggle" aria-label="Filters' + (applied.length ? ", " + applied.length + " applied" : "") + '">' +
         icons.filter + "<span>Filters</span>" + (applied.length ? "<i>" + applied.length + "</i>" : "") + "</button></div>" +
-    '<div class="pills scroll quick">' + presets().map(function (p) {
-      var on = Object.keys(DEFAULT_FILTER).every(function (k) { return f[k] === p.f[k]; });
-      return '<button class="pill' + (on ? " on" : "") + '" data-act="clf-preset" data-id="' + p.id + '">' + esc(p.label) + "<b>" + p.n + "</b></button>";
-    }).join("") + "</div>";
+    listTiles(f);
   if (applied.length) {
     html += '<div class="applied">' + applied.map(function (a) {
       return '<button class="pill on small" data-act="clf-remove" data-k="' + a.k + '" aria-label="Remove filter ' + esc(a.text) + '">' + esc(a.text) + "<b>×</b></button>";

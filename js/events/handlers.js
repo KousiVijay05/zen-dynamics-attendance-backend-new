@@ -389,9 +389,15 @@ tasks: selectedTasks
         .then(function (msg) { sayAndPaint(msg, true); }).catch(function (err) { say(err.message); });
       return;
     }
+    if (act === "clf-group") { state.clListGroup = t.getAttribute("data-v"); emitChange(); loadPayMonths().catch(function () {}); return; }
     if (act === "clf-preset") {
       var ps = presets().filter(function (p) { return p.id === t.getAttribute("data-id"); })[0];
-      if (ps) { state.clFilter = Object.assign({}, ps.f); state.clSearch = ""; state.clEndYear = null; emitChange(); }
+      if (ps) {
+        var same = Object.keys(DEFAULT_FILTER).every(function (k) { return (state.clFilter[k] === undefined ? DEFAULT_FILTER[k] : state.clFilter[k]) === ps.f[k]; });
+        state.clFilter = same ? Object.assign({}, DEFAULT_FILTER) : Object.assign({}, ps.f);      // tap the same tile again to clear it
+        state.clListGroup = ps.group; state.clSearch = ""; state.clEndYear = null; emitChange();
+        if (ps.pay) loadPayMonths().catch(function () {});
+      }
       return;
     }
     if (act === "clf-toggle") { state.clFilterOpen = !state.clFilterOpen; emitChange(); return; }
@@ -440,6 +446,7 @@ tasks: selectedTasks
       state.clSub = v; state.clEdit = null; state.clRenewType = null; state.msg = ""; state.clSearch = "";
       emitChange();
       if (v === "report") loadMonth(state.clMonth || clToday().slice(0, 7));
+      if (v === "all") loadPayMonths().catch(function () {});
       return;
     }
     if (act === "cl-edit") {

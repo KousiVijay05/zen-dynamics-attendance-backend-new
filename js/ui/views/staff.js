@@ -30,7 +30,16 @@ import { leaveBalance, leavesFor } from "../../domain/leave.js";
 import { proxBlock, lockedBlock } from "../components/proximity.js";
 import { brandMark } from "../components/brand.js";
 import { icons } from "../components/icons.js";
-import { tickedToday } from "../../domain/clients.js";
+import { tickedToday, renewalAlerts } from "../../domain/clients.js";
+
+/* A nudge on the coach's home screen: who is about to expire or has expired. */
+function renewLine() {
+  if (!state.clLoaded) return "";
+  var r = renewalAlerts();
+  if (!r.soon.length && !r.expired.length) return "";
+  return '<br><span class="cl-alert">' + (r.soon.length ? r.soon.length + " ending in 3 days" : "") + (r.soon.length && r.expired.length ? " · " : "") +
+    (r.expired.length ? r.expired.length + " expired" : "") + " — remind them</span>";
+}
 
 function clientCount() {
   var on = state.clients.filter(function (c) { return c.active !== false; });
@@ -227,7 +236,7 @@ export function vStaff() {
 
     '<button class="cl-launch" data-act="cl-open">' +
       '<span class="cl-ico">' + icons.clock + '</span>' +
-      '<span><b>Client sessions</b><br><span>' + (state.session ? 'Session in progress: ' + esc(state.session.batchName) : 'Take attendance for a batch') + (state.clLoaded ? ' · ' + clientCount() : '') + '</span></span>' +
+      '<span><b>Client sessions</b><br><span>' + (state.session ? 'Session in progress: ' + esc(state.session.batchName) : 'Take attendance for a batch') + (state.clLoaded ? ' · ' + clientCount() : '') + '</span>' + renewLine() + '</span>' +
       '<span class="cl-go">›</span>' +
     '</button>' +
 

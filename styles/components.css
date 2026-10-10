@@ -484,3 +484,33 @@ details.sess[open] > summary { background: var(--panel-2); }
 .mcell.on { background: var(--ink); color: var(--paper); border-color: var(--ink); box-shadow: none; }
 .mcell.on b { color: var(--gold); }
 .mcell:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+/* ---------- list tiles (Clients) ---------- */
+.lists { margin-top: 14px; }
+.seg-pills { display: flex; gap: 4px; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; }
+.seg-pill { flex: 1; min-width: 0; min-height: 38px; padding: 0 6px; cursor: pointer; font: 650 13.5px var(--sans); color: var(--ink2); background: transparent; border: 0; border-radius: 999px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seg-pill.on { background: var(--ink); color: var(--paper); }
+.ltiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-top: 10px; }
+.ltile {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 78px; padding: 12px 14px; text-align: left; cursor: pointer;
+  font-family: var(--sans); color: var(--ink); background: var(--panel-raised); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);
+  transition: background .15s, color .15s, border-color .15s;
+}
+.ltile b { font-size: 24px; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.ltile span { font-size: 12.5px; font-weight: 600; color: var(--ink2); line-height: 1.25; }
+.ltile i { font-style: normal; font-size: 12.5px; font-weight: 800; color: var(--gold-strong); margin-top: 2px; }
+.ltile.on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.ltile.on span { color: rgba(255, 255, 255, .72); }
+.ltile.on i { color: var(--gold); }
+.ltile:focus-visible, .seg-pill:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+/* ---------- renewal reminders (coach screens) ---------- */
+.sess.renewals { border-color: var(--gold); margin-bottom: 14px; }
+.sess.renewals > summary .dur { background: var(--gold); color: #1B1710; min-width: 30px; height: 30px; line-height: 30px; text-align: center; border-radius: 999px; font-size: 14px; }
+.tag.warn { color: #B4231B; background: #FBE9E7; }
+.renew-flag { display: inline-block; margin-top: 4px; font-size: 12px; font-weight: 700; }
+.renew-flag.expired { color: #B4231B; }
+.renew-flag.soon { color: var(--gold-strong); }
+.remind-note { margin-top: 12px; padding: 10px 14px; font-size: 13.5px; line-height: 1.4; color: var(--ink); background: var(--gold-soft); border: 1px solid var(--gold); border-radius: var(--radius-md); }
+.cl-launch span .cl-alert { display: inline-block; margin-top: 3px; font-size: 12.5px; font-weight: 700; color: var(--gold-strong); }
+@media (prefers-color-scheme: dark) { .tag.warn { color: #FFB4AB; background: #4A1F1B; } .renew-flag.expired { color: #FFB4AB; } }
